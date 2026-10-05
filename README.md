@@ -11,14 +11,7 @@
 
 ## Hướng dẫn cài đặt và chạy dự án
 
-### 1. Khởi chạy Database
-Mở terminal tại thư mục gốc của dự án, chạy lệnh:
-```bash
-docker-compose up -d
-```
-> Database PostgreSQL sẽ chạy ở port 5432 (admin/password123). Redis chạy ở port 6379.
-
-### 2. Cấu hình biến môi trường
+### 1. Cấu hình biến môi trường
 Copy file `.env.example` thành `.env` ở thư mục gốc:
 ```bash
 # Windows
@@ -27,27 +20,47 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-### 3. Khởi chạy Backend
-Mở terminal mới:
+### 2. Chạy toàn bộ bằng Docker (khuyên dùng)
+```bash
+docker compose up --build --watch
+```
+- Lần đầu build mất ~2 phút, các lần sau vài giây (đã cache dependencies).
+- **Hot reload:** sửa code trong `backend/src`, `frontend/src`, `frontend/public` sẽ tự cập nhật vào container, không cần tắt/bật lại.
+- Sửa `package.json` (thêm thư viện) → container tự build lại.
+- Sửa `.env` → chạy lại `docker compose up -d` để nạp biến mới.
+- Muốn chạy nền không cần hot reload: `docker compose up -d --build`.
+- Tắt: `Ctrl + C` rồi `docker compose down` (thêm `-v` nếu muốn xóa luôn dữ liệu DB).
+
+| Service | URL |
+|---|---|
+| Frontend (Next.js) | http://localhost:3001 |
+| Backend API (NestJS) | http://localhost:3000 |
+| Swagger API Docs | http://localhost:3000/api/docs |
+| PostgreSQL | localhost:5432 (admin/password123) |
+| Redis | localhost:6379 |
+
+### 3. (Tuỳ chọn) Chạy tay không dùng Docker cho BE/FE
+Chỉ bật DB và Redis bằng Docker:
+```bash
+docker compose up -d postgres redis
+```
+Backend (terminal 1):
 ```bash
 cd backend
 npm install
 npm run start:dev
 ```
-> API Server chạy tại: http://localhost:3000
-> Swagger API Docs: http://localhost:3000/api/docs
-
-### 4. Khởi chạy Frontend
-Mở terminal mới:
+Frontend (terminal 2):
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-> Web App chạy tại: http://localhost:3001 (hoặc 3000)
+> Lưu ý: không chạy song song cách này với `docker compose up` vì trùng port 3000/3001.
 
 ## Cấu trúc thư mục chính
 - `/docs`: Tài liệu phân tích thiết kế, database schema, spec nghiệp vụ.
 - `/frontend`: Source code giao diện web (Next.js).
 - `/backend`: Source code xử lý logic, API (NestJS).
-- `docker-compose.yml`: Script khởi tạo DB và Redis.
+- `docker-compose.yml`: Chạy toàn bộ hệ thống (Postgres, Redis, Backend, Frontend).
+- `backend/Dockerfile`, `frontend/Dockerfile`: Multi-stage build (`dev` cho phát triển, `prod` cho production).

@@ -6,6 +6,8 @@ import { join } from "path";
 config({ path: join(process.cwd(), '..', '.env') });
 
 const nextConfig: NextConfig = {
+  // Build gọn để chạy production trong Docker (chỉ copy file cần thiết)
+  output: "standalone",
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },

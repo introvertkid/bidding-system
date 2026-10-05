@@ -15,6 +15,7 @@ import { Invoice } from './modules/invoices/entities/invoice.entity';
 // Modules
 import { AuctionsModule } from './modules/auctions/auctions.module';
 import { ProductsModule } from './modules/products/products.module';
+import { BidsModule } from './modules/bids/bids.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ProductsModule } from './modules/products/products.module';
     }),
     AuctionsModule,
     ProductsModule,
+    BidsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

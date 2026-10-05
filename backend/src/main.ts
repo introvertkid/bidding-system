@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -7,6 +8,9 @@ async function bootstrap() {
 
   // Cho phép CORS để Frontend gọi được API
   app.enableCors();
+
+  // Validate request body theo DTO (class-validator)
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   // Cấu hình Swagger
   const config = new DocumentBuilder()
