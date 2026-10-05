@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -13,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d bidding_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -22,7 +25,92 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    container_name: bidding_backend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Trong mạng Docker, gọi DB/Redis bằng tên service thay vì localhost
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      # Giữ lại ảnh sản phẩm đã upload khi container bị build lại
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/auctions"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        # Sửa code -> copy vào container -> nest --watch tự build lại
+        - action: sync
+          path: ./backend/src
+          target: /app/src
+        # Thêm/bớt package -> build lại image
+        - action: rebuild
+          path: ./backend/package.json
+        - action: rebuild
+          path: ./backend/package-lock.json
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    container_name: bidding_frontend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Next.js server gọi backend qua mạng Docker (trình duyệt đi qua proxy /api/v1 của Next)
+      BACKEND_URL: http://backend:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      backend:
+        condition: service_healthy
+    develop:
+      watch:
+        # Sửa code -> copy vào container -> Next.js tự hot reload
+        - action: sync
+          path: ./frontend/src
+          target: /app/src
+        - action: sync
+          path: ./frontend/public
+          target: /app/public
+        # Đổi config Next -> restart container (không cần build lại)
+        - action: sync+restart
+          path: ./frontend/next.config.ts
+          target: /app/next.config.ts
+        # Thêm/bớt package -> build lại image
+        - action: rebuild
+          path: ./frontend/package.json
+        - action: rebuild
+          path: ./frontend/package-lock.json
 
 volumes:
   postgres_data:
   redis_data:
+  uploads:

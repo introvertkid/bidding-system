@@ -15,6 +15,9 @@ import { Invoice } from './modules/invoices/entities/invoice.entity';
 // Modules
 import { AuctionsModule } from './modules/auctions/auctions.module';
 import { ProductsModule } from './modules/products/products.module';
+import { BidsModule } from './modules/bids/bids.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { SeedService } from './database/seed.service';
 
 @Module({
   imports: [
@@ -36,10 +39,12 @@ import { ProductsModule } from './modules/products/products.module';
       }),
       inject: [ConfigService],
     }),
+    AuthModule,
     AuctionsModule,
     ProductsModule,
+    BidsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, SeedService],
 })
 export class AppModule {}

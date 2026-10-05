@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { clientApi } from '@/lib/api';
+import { saveSession, type SessionUser } from '@/lib/session';
 
 type AuthMode = 'login' | 'register';
 type FieldName = 'fullName' | 'email' | 'password' | 'confirmPassword';
@@ -18,15 +21,19 @@ const fields: { name: FieldName; label: string; type: string; autoComplete: stri
 export default function AuthForm({ mode }: { mode: AuthMode }) {
   const isRegister = mode === 'register';
   const [values, setValues] = useState<FormValues>({ fullName: '', email: '', password: '', confirmPassword: '' });
+  const router = useRouter();
   const [errors, setErrors] = useState<FormErrors>({});
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const visibleFields = fields.filter(field => isRegister || field.name === 'email' || field.name === 'password');
 
   function updateField(name: FieldName, value: string) {
     setValues(previous => ({ ...previous, [name]: value }));
     setErrors(previous => ({ ...previous, [name]: undefined, ...(name === 'password' ? { confirmPassword: undefined } : {}) }));
+    setFormError('');
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: FormErrors = {};
     if (isRegister && !values.fullName.trim()) nextErrors.fullName = 'Vui lòng nhập họ và tên.';
@@ -45,8 +52,23 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
       if (input instanceof HTMLInputElement) input.focus();
       return;
     }
-    // Frontend validation only. No API calls, credentials, tokens, or sessions.
 
+    setSubmitting(true);
+    try {
+      const body = isRegister
+        ? { fullName: values.fullName.trim(), email: values.email.trim(), password: values.password }
+        : { email: values.email.trim(), password: values.password };
+      const session = await clientApi<{ accessToken: string; user: SessionUser }>(`/auth/${mode}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      saveSession(session);
+      router.push('/auctions');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Có lỗi xảy ra, vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -79,8 +101,9 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
           </div>
         );
       })}
-      <button type="submit" className="w-full rounded-md bg-[#234e3c] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#163b2b]">
-        {isRegister ? 'Đăng ký' : 'Đăng nhập'}
+      {formError && <p role="alert" className="text-sm text-[#a34539]">{formError}</p>}
+      <button type="submit" disabled={submitting} className="w-full rounded-md bg-[#234e3c] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#163b2b] disabled:opacity-60">
+        {submitting ? 'Đang xử lý…' : isRegister ? 'Đăng ký' : 'Đăng nhập'}
       </button>
       <p className="text-center text-sm text-[#64716a]">
         {isRegister ? 'Đã có tài khoản? ' : 'Chưa có tài khoản? '}

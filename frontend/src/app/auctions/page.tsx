@@ -2,11 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 import AuctionList from '@/components/auction-list';
-import { auctions } from '@/data/auctions';
+import { serverApi } from '@/lib/api';
+import type { Auction } from '@/data/auctions';
 
 export const metadata: Metadata = { title: 'Phiên đấu giá | Bidwell' };
 
-export default function AuctionsPage() {
+export default async function AuctionsPage() {
+  const auctions = await serverApi<Auction[]>('/auctions');
   return (
     <div className="min-h-screen bg-[#fafaf8] text-[#182b25]">
       <SiteHeader currentPage="auctions" />

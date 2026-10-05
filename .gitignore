@@ -47,3 +47,6 @@ redis_data/
 # Testing
 coverage/
 .nyc_output/
+
+# Ảnh upload của backend
+backend/uploads/

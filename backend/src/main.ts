@@ -1,12 +1,24 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { UPLOAD_DIR } from './modules/auctions/auctions.controller';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Ảnh sản phẩm upload lên được phục vụ tại /uploads/<tên file>
+  mkdirSync(UPLOAD_DIR, { recursive: true });
+  app.useStaticAssets(join(process.cwd(), UPLOAD_DIR), { prefix: `/${UPLOAD_DIR}/` });
 
   // Cho phép CORS để Frontend gọi được API
   app.enableCors();
+
+  // Validate request body theo DTO (class-validator)
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   // Cấu hình Swagger
   const config = new DocumentBuilder()
