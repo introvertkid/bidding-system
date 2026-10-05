@@ -49,6 +49,14 @@ services:
       PORT: 3000
     ports:
       - "3000:3000"
+    volumes:
+      # Giữ lại ảnh sản phẩm đã upload khi container bị build lại
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/auctions"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,10 +83,14 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # Next.js server gọi backend qua mạng Docker (trình duyệt đi qua proxy /api/v1 của Next)
+      BACKEND_URL: http://backend:3000
     ports:
       - "3001:3001"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     develop:
       watch:
         # Sửa code -> copy vào container -> Next.js tự hot reload
@@ -101,3 +113,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads:

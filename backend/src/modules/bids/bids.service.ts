@@ -8,14 +8,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { maskName } from '../../common/utils/mask-name';
+import { getMinNextBid, getViewStatus } from '../auctions/auction-view';
 import { Auction, AuctionStatus } from '../auctions/entities/auction.entity';
 import { AccountStatus, User } from '../users/entities/user.entity';
+import { AuctionGateway } from './auction.gateway';
 import { Bid, BidStatus } from './entities/bid.entity';
 
 // Luật chống bắn tỉa: bid trong 1 phút cuối sẽ reset đồng hồ về đúng 1 phút
 const ANTI_SNIPER_WINDOW_MS = 60 * 1000;
-
-const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class BidsService {
@@ -23,14 +24,11 @@ export class BidsService {
     private dataSource: DataSource,
     @InjectRepository(Bid)
     private bidsRepository: Repository<Bid>,
+    private auctionGateway: AuctionGateway,
   ) {}
 
   async placeBid(auctionId: string, bidderId: string, amount: number) {
-    if (!UUID_FORMAT.test(bidderId)) {
-      throw new UnauthorizedException('Người dùng không hợp lệ');
-    }
-
-    return this.dataSource.transaction(async (manager) => {
+    const placed = await this.dataSource.transaction(async (manager) => {
       // 1. Kiểm tra trạng thái tài khoản
       const bidder = await manager.findOne(User, { where: { id: bidderId } });
       if (!bidder) {
@@ -50,11 +48,7 @@ export class BidsService {
       }
 
       const now = new Date();
-      if (
-        auction.status !== AuctionStatus.ACTIVE ||
-        now < auction.startTime ||
-        now >= auction.endTime
-      ) {
+      if (getViewStatus(auction, now) !== 'LIVE') {
         throw new BadRequestException('Phiên đấu giá không trong thời gian diễn ra');
       }
       if (auction.product.sellerId === bidderId) {
@@ -64,11 +58,8 @@ export class BidsService {
         throw new BadRequestException('Bạn đang là người trả giá cao nhất');
       }
 
-      // 3. So sánh amount với giá tối thiểu (cột decimal được pg trả về dạng string)
-      const currentPrice = Number(auction.currentPrice);
-      const minAmount = auction.highestBidderId
-        ? currentPrice + Number(auction.bidIncrement)
-        : Number(auction.startingPrice);
+      // 3. So sánh amount với giá tối thiểu
+      const minAmount = getMinNextBid(auction);
       if (amount < minAmount) {
         throw new BadRequestException(`Giá đặt phải tối thiểu là ${minAmount}`);
       }
@@ -84,6 +75,7 @@ export class BidsService {
         .createQueryBuilder()
         .update(Auction)
         .set({
+          status: AuctionStatus.ACTIVE,
           currentPrice: amount,
           highestBidderId: bidderId,
           endTime,
@@ -112,20 +104,50 @@ export class BidsService {
       const bid = await manager.save(
         manager.create(Bid, { auctionId, bidderId, amount, status: BidStatus.VALID }),
       );
-
-      // TODO: Cập nhật current_price vào Redis và broadcast `auction_updated` qua WebSockets
+      const totalBids = await manager.countBy(Bid, { auctionId });
 
       return {
-        status: 'success',
-        message: 'Placed bid successfully',
-        data: {
-          bidId: bid.id,
-          amount: Number(bid.amount),
-          endTime,
-          createdAt: bid.createdAt,
-        },
+        bid,
+        endTime,
+        totalBids,
+        bidderName: maskName(bidder.fullName),
+        productName: auction.product.title,
+        previousBidderId: auction.highestBidderId,
+        bidIncrement: Number(auction.bidIncrement),
       };
     });
+
+    // 7. Transaction đã commit mới báo realtime cho các client khác
+    // TODO: Cập nhật current_price vào Redis
+    const { bid, endTime, totalBids, bidderName } = placed;
+    this.auctionGateway.emitAuctionUpdated({
+      auctionId,
+      currentPrice: amount,
+      minNextBid: amount + placed.bidIncrement,
+      highestBidderName: bidderName,
+      totalBids,
+      endTime: endTime.toISOString(),
+      bid: {
+        id: bid.id,
+        bidderName,
+        amount,
+        status: BidStatus.VALID,
+        createdAt: bid.createdAt.toISOString(),
+      },
+    });
+    if (placed.previousBidderId && placed.previousBidderId !== bidderId) {
+      this.auctionGateway.emitOutbid(placed.previousBidderId, {
+        auctionId,
+        productName: placed.productName,
+        currentPrice: amount,
+      });
+    }
+
+    return {
+      status: 'success',
+      message: 'Placed bid successfully',
+      data: { bidId: bid.id, amount, endTime, createdAt: bid.createdAt },
+    };
   }
 
   async findByAuction(auctionId: string) {
@@ -145,8 +167,3 @@ export class BidsService {
   }
 }
 
-// "Nguyễn Văn An" -> "Nguyễn V** A*"
-function maskName(fullName: string): string {
-  const [first, ...rest] = fullName.trim().split(/\s+/);
-  return [first, ...rest.map((word) => word[0] + '*'.repeat(word.length - 1))].join(' ');
-}

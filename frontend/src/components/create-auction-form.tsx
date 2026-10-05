@@ -2,7 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { clientApi } from '@/lib/api';
+import { useSessionUser } from '@/lib/use-session-user';
 
 type FormValues = {
   title: string;
@@ -18,7 +21,11 @@ export default function CreateAuctionForm() {
   const [values, setValues] = useState<FormValues>({ title: '', description: '', startingPrice: '', startTime: '', endTime: '' });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const router = useRouter();
+  const user = useSessionUser();
   const [errors, setErrors] = useState<FormErrors>({});
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -54,7 +61,7 @@ export default function CreateAuctionForm() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: FormErrors = {};
     if (!values.title.trim()) nextErrors.title = 'Vui lòng nhập tên sản phẩm.';
@@ -73,8 +80,27 @@ export default function CreateAuctionForm() {
     if (firstInvalidField) {
       const input = event.currentTarget.elements.namedItem(firstInvalidField);
       if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) input.focus();
+      return;
     }
-    // Validation only. Keep the file in memory until backend upload is implemented.
+
+    const formData = new FormData();
+    formData.append('title', values.title.trim());
+    formData.append('description', values.description.trim());
+    formData.append('startingPrice', values.startingPrice);
+    // datetime-local là giờ địa phương, gửi ISO (UTC) để backend hiểu đúng múi giờ
+    formData.append('startTime', new Date(values.startTime).toISOString());
+    formData.append('endTime', new Date(values.endTime).toISOString());
+    if (imageFile) formData.append('image', imageFile);
+
+    setFormError('');
+    setSubmitting(true);
+    try {
+      const auction = await clientApi<{ id: string }>('/auctions', { method: 'POST', body: formData });
+      router.push(`/auctions/${auction.id}`);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Tạo phiên thất bại.');
+      setSubmitting(false);
+    }
   }
 
   function inputClass(name: FieldName) {
@@ -138,9 +164,15 @@ export default function CreateAuctionForm() {
           )}
         </section>
       </div>
+      {user === null && (
+        <p role="alert" className="mt-6 text-sm text-[#a34539]">
+          Bạn cần <Link href="/login" className="font-medium underline underline-offset-4">đăng nhập</Link> để tạo phiên đấu giá.
+        </p>
+      )}
+      {formError && <p role="alert" className="mt-6 text-sm text-[#a34539]">{formError}</p>}
       <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-[#182b25]/10 pt-5 text-sm font-medium">
         <Link href="/auctions" className="rounded-md border border-[#182b25]/20 px-4 py-2.5 hover:bg-[#f0f2ed]">Hủy</Link>
-        <button type="submit" className="rounded-md bg-[#234e3c] px-4 py-2.5 text-white hover:bg-[#163b2b]">Tạo phiên đấu giá</button>
+        <button type="submit" disabled={submitting} className="rounded-md bg-[#234e3c] px-4 py-2.5 text-white hover:bg-[#163b2b] disabled:opacity-60">{submitting ? 'Đang tạo…' : 'Tạo phiên đấu giá'}</button>
       </div>
     </form>
   );

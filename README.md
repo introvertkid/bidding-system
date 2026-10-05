@@ -21,15 +21,20 @@ cp .env.example .env
 ```
 
 ### 2. Chạy toàn bộ bằng Docker (khuyên dùng)
+Bật hệ thống (chạy nền):
 ```bash
-docker compose up --build --watch
+docker compose up -d --build
 ```
-- Lần đầu build mất ~2 phút, các lần sau vài giây (đã cache dependencies).
-- **Hot reload:** sửa code trong `backend/src`, `frontend/src`, `frontend/public` sẽ tự cập nhật vào container, không cần tắt/bật lại.
-- Sửa `package.json` (thêm thư viện) → container tự build lại.
+Khi đang code, mở thêm 1 terminal để tự cập nhật code vào container (backend ~3 giây, frontend ~1 giây, không cần tắt/bật container):
+```bash
+docker compose watch
+```
+- `Ctrl + C` để tắt `watch`; các container vẫn chạy bình thường. Demo không cần `watch`.
+- Vì sao không mount thư mục code như thường lệ: trên Windows, thư mục mount vào container không báo khi file thay đổi, phải bật chế độ quét file → chậm hơn (~10 giây) và frontend tốn gấp ~3 lần RAM. `watch` chép file vào container nên nhanh và nhẹ hơn.
+- Đang chạy `watch` mà sửa `package.json` → tự build lại. Không chạy `watch` thì dùng lại `docker compose up -d --build`.
 - Sửa `.env` → chạy lại `docker compose up -d` để nạp biến mới.
-- Muốn chạy nền không cần hot reload: `docker compose up -d --build`.
-- Tắt: `Ctrl + C` rồi `docker compose down` (thêm `-v` nếu muốn xóa luôn dữ liệu DB).
+- Xem log: `docker compose logs -f backend` (hoặc `frontend`).
+- Tắt: `docker compose down` (thêm `-v` nếu muốn xóa luôn dữ liệu DB và ảnh đã upload).
 
 | Service | URL |
 |---|---|
@@ -38,6 +43,22 @@ docker compose up --build --watch
 | Swagger API Docs | http://localhost:3000/api/docs |
 | PostgreSQL | localhost:5432 (admin/password123) |
 | Redis | localhost:6379 |
+
+### Dữ liệu demo
+Khi database trống, backend tự tạo 10 phiên đấu giá mẫu (đang diễn ra / sắp diễn ra / đã kết thúc) và các tài khoản sau, mật khẩu đều là `123456`:
+
+| Email | Vai trò trong dữ liệu mẫu |
+|---|---|
+| `an@bidwell.test` | Đã đặt giá nhiều phiên (đang dẫn đầu, bị vượt, thắng, thua) và có 2 phiên tự tạo |
+| `binh@bidwell.test`, `chau@bidwell.test` | Người đặt giá khác, dùng để demo tranh giá |
+| `shop@bidwell.test` | Người bán phần lớn sản phẩm |
+
+Thời gian các phiên được tính **từ lúc tạo dữ liệu**, nên sau vài giờ các phiên "đang diễn ra" sẽ kết thúc. Trước khi demo, xóa dữ liệu cũ để tạo lại:
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+> `-v` xóa toàn bộ dữ liệu database và ảnh đã upload. Tắt tự tạo dữ liệu bằng `SEED_DEMO_DATA=false` trong `.env`.
 
 ### 3. (Tuỳ chọn) Chạy tay không dùng Docker cho BE/FE
 Chỉ bật DB và Redis bằng Docker:

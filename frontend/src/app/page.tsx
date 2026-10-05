@@ -1,9 +1,11 @@
-﻿import Link from 'next/link';
+import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 import AuctionBrowser from '@/components/auction-browser';
-import { auctions } from '@/data/auctions';
+import { serverApi } from '@/lib/api';
+import type { Auction } from '@/data/auctions';
 
-export default function Home() {
+export default async function Home() {
+  const auctions = await serverApi<Auction[]>('/auctions');
   return (
     <div className="min-h-screen bg-[#fafaf8] text-[#182b25]">
       <SiteHeader currentPage="home" />
