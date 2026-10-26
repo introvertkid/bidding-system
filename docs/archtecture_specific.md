@@ -14,19 +14,19 @@ Sơ đồ sau thể hiện mối liên hệ giữa năm giải pháp, từ lúc 
 
 ```mermaid
 flowchart TD
-    Client["👤 Client (Web / Mobile)"] -->|1. HTTP POST /bids\n[Idempotency-Key & X-Correlation-ID]| Ingress["🛡️ Tầng Biên Giới (Ingress / API Gateway)"]
+    Client["👤 Client (Web / Mobile)"] -->|"1. HTTP POST /bids<br/>(Idempotency-Key & X-Correlation-ID)"| Ingress["🛡️ Tầng Biên Giới (Ingress / API Gateway)"]
 
     subgraph Pillar12["Giải pháp 1 & 2: Quan Sát & An Toàn Giao Dịch"]
-        Ingress --> TraceMW["📌 1. Tracing Middleware\n(Bắt/Tạo X-Correlation-ID & Gắn Async Context)"]
-        TraceMW --> IdemGuard["🔑 2. Idempotency Interceptor\n(Kiểm tra Idempotency-Key trong Redis)"]
+        Ingress --> TraceMW["📌 1. Tracing Middleware<br/>(Bắt/Tạo X-Correlation-ID & Gắn Async Context)"]
+        TraceMW --> IdemGuard["🔑 2. Idempotency Interceptor<br/>(Kiểm tra Idempotency-Key trong Redis)"]
     end
 
-    IdemGuard -->|"Key Đã Hoàn Thành"| CachedRes["⚡ Trả ngay Cached Response cũ\n(Không chạm DB, không sinh duplicate bid)"]
+    IdemGuard -->|"Key Đã Hoàn Thành"| CachedRes["⚡ Trả ngay Cached Response cũ<br/>(Không chạm DB, không sinh duplicate bid)"]
     IdemGuard -->|"Key Đang Xử Lý"| InFlight["⚠️ 409 Conflict: Request In-Flight"]
     IdemGuard -->|"Key Mới Hợp Lệ"| CoreEngine["⚡ Core Bidding Engine (luồng xử lý chính)"]
 
     subgraph Pillar3["Giải pháp 3: Transactional Outbox (Chống Dual-Write)"]
-        CoreEngine --> SQLTx["🔒 1 SQL Transaction Duy Nhất (ACID)\n1. Cập nhật Auction (Optimistic Lock: version=v+1)\n2. Thêm bản ghi Bids (Append-only Ledger)\n3. Thêm bản ghi OUTBOX_EVENTS (Status: PENDING)"]
+        CoreEngine --> SQLTx["🔒 1 SQL Transaction Duy Nhất (ACID)<br/>1. Cập nhật Auction (Optimistic Lock: version=v+1)<br/>2. Thêm bản ghi Bids (Append-only Ledger)<br/>3. Thêm bản ghi OUTBOX_EVENTS (Status: PENDING)"]
         SQLTx --> Commit["Commit PostgreSQL"]
     end
 
@@ -34,14 +34,14 @@ flowchart TD
     SaveIdem --> Res201["✅ Trả về 201 Created"]
 
     subgraph Pillar3B["Outbox Relay & Queue-based Load Leveling"]
-        Commit -.-> OutboxWorker["👷 Outbox Relay Worker\n(Đọc OUTBOX_EVENTS PENDING)"]
-        OutboxWorker --> PushBullMQ["Push Job vào Redis BullMQ\n(Kèm X-Correlation-ID)"]
+        Commit -.-> OutboxWorker["👷 Outbox Relay Worker<br/>(Đọc OUTBOX_EVENTS PENDING)"]
+        OutboxWorker --> PushBullMQ["Push Job vào Redis BullMQ<br/>(Kèm X-Correlation-ID)"]
         PushBullMQ --> MarkSent["Đánh dấu Outbox: PUBLISHED"]
         PushBullMQ --> BullMQWorker["👥 Competing Consumer Workers"]
     end
 
     subgraph Pillar4["Giải pháp 4: CQRS & Cache-Aside (Tối ưu luồng đọc)"]
-        BullMQWorker --> UpdateCache["⚡ Cập nhật Redis Hash: cache:auction:{id}\n(Cập nhật dữ liệu hiển thị cho người xem)"]
+        BullMQWorker --> UpdateCache["⚡ Cập nhật Redis Hash: cache:auction:id<br/>(Cập nhật dữ liệu hiển thị cho người xem)"]
         BullMQWorker --> WS["📡 Broadcast Socket.io Room & Outbid Alert"]
         
         Reader["👀 10.000 Khách Xem Giá"] --> ReadQuery["GET /auctions/:id"]
@@ -55,7 +55,7 @@ flowchart TD
         SettleSaga --> Step1["Bước 1: Chốt phiên ENDED & Tạo Invoice"]
         Step1 --> Step2["Bước 2: Chờ Thanh Toán (Thời hạn 3 ngày)"]
         Step2 -->|"Thanh Toán Thành Công"| SagaComplete["✅ Giao Hàng & Hoàn Cọc Người Thua"]
-        Step2 -->|"Quá hạn thanh toán"| CompensatingTx["🔄 Giao Dịch Bù Trừ (Compensating Transaction):\n1. Tịch thu tiền cọc người thắng (Phạt)\n2. Hủy hóa đơn (INVOICE_CANCELED)\n3. Mời người trả giá cao kế tiếp mua sản phẩm"]
+        Step2 -->|"Quá hạn thanh toán"| CompensatingTx["🔄 Giao Dịch Bù Trừ (Compensating Transaction):<br/>1. Tịch thu tiền cọc người thắng (Phạt)<br/>2. Hủy hóa đơn (INVOICE_CANCELED)<br/>3. Mời người trả giá cao kế tiếp mua sản phẩm"]
     end
 ```
 
@@ -95,13 +95,13 @@ sequenceDiagram
     Client->>MW: POST /bids (Header: X-Correlation-ID: c1a2-3b4c...)
     MW->>MW: Gắn correlationId vào AsyncLocalStorage
     MW->>API: Chuyển tiếp Request
-    API->>Log: log("Bắt đầu xử lý đặt giá") -> [c1a2-3b4c] Logged
+    API->>Log: log: Bắt đầu xử lý đặt giá (ID c1a2-3b4c)
     API->>Queue: addJob('bid_placed', { data, correlationId: 'c1a2-3b4c' })
     API-->>Client: 201 Created (Header: X-Correlation-ID: c1a2-3b4c)
 
     Note over Queue,Worker: Ranh giới Bất đồng bộ (Async Boundary)
     Queue->>Worker: Consume Job
-    Worker->>Log: log("Worker bắt đầu phát Socket") -> [c1a2-3b4c] Logged
+    Worker->>Log: log: Worker bắt đầu phát Socket (ID c1a2-3b4c)
 ```
 
 ---
@@ -130,11 +130,11 @@ Bên cạnh khóa định danh, nên lưu dấu vân tay của nội dung yêu c
 #### B. Lưu đồ xử lý
 ```mermaid
 flowchart TD
-    Req["Request POST /bids\nHeader: Idempotency-Key: 9b1deb4d..."] --> CheckHeader{"Có Header Idempotency-Key?"}
+    Req["Request POST /bids<br/>Header: Idempotency-Key: 9b1deb4d..."] --> CheckHeader{"Có Header Idempotency-Key?"}
     CheckHeader -->|"Không"| Warn["400 Bad Request (thiếu Idempotency-Key)"]
     CheckHeader -->|"Có"| CheckRedis["GET idempotency:userId:key từ Redis"]
     
-    CheckRedis -->|"Đã tồn tại: COMPLETED"| ReturnCached["⚡ Trả ngay Cached Response cũ\n[Status: 201 Created]\n(Không ghi DB, không trigger transaction)"]
+    CheckRedis -->|"Đã tồn tại: COMPLETED"| ReturnCached["⚡ Trả ngay Cached Response cũ<br/>(Status: 201 Created)<br/>(Không ghi DB, không trigger transaction)"]
     CheckRedis -->|"Đã tồn tại: IN_PROGRESS"| ReturnConflict["❌ 409 Conflict: Giao dịch đang được xử lý, vui lòng chờ"]
     CheckRedis -->|"Chưa tồn tại"| SetInProgress["SET key = IN_PROGRESS với NX và TTL (thao tác nguyên tử)"]
 
@@ -239,14 +239,14 @@ sequenceDiagram
 
     Note over Reader,Redis: LUỒNG ĐỌC (ưu tiên cache)
     Reader->>API: GET /auctions/:id
-    API->>Redis: HGETALL cache:auction:{id}
+    API->>Redis: HGETALL cache:auction:id
     alt Cache Hit (Có sẵn trong Redis)
         Redis-->>API: Trả về JSON phiên đấu giá
         API-->>Reader: 200 OK (phản hồi từ cache)
     else Cache Miss (Lần đầu hoặc hết hạn TTL)
         API->>DB: Query Database (JOIN tables)
         DB-->>API: Dữ liệu phiên đấu giá
-        API->>Redis: HSET cache:auction:{id} (TTL: 300s)
+        API->>Redis: HSET cache:auction:id (TTL: 300s)
         API-->>Reader: 200 OK
     end
 
@@ -255,7 +255,7 @@ sequenceDiagram
     API->>DB: Commit DB Transaction
     API-->>Bidder: 201 Created
     API-.->Worker: Event: BID_PLACED
-    Worker->>Redis: HSET cache:auction:{id} currentPrice=NEW, totalBids=N+1
+    Worker->>Redis: HSET cache:auction:id currentPrice=NEW, totalBids=N+1
     Note over Redis: Cache được cập nhật bất đồng bộ nên có thể trễ ngắn
 ```
 
@@ -289,20 +289,15 @@ stateDiagram-v2
     LIVE --> ENDED: Hết giờ & Có người dẫn đầu
     LIVE --> FAILED: Hết giờ & Không có ai bid
 
-    state SagaExecution {
-        ENDED --> INVOICE_PENDING: Bước 1: Tạo hóa đơn người thắng
-        INVOICE_PENDING --> PAYMENT_SUCCESS: Bước 2A: Người thắng thanh toán đủ
-        PAYMENT_SUCCESS --> SETTLED: Giao dịch thành công trọn vẹn
+    ENDED --> INVOICE_PENDING: Bước 1: Tạo hóa đơn người thắng
+    INVOICE_PENDING --> PAYMENT_SUCCESS: Bước 2A: Người thắng thanh toán đủ
+    PAYMENT_SUCCESS --> SETTLED: Giao dịch thành công trọn vẹn
 
-        INVOICE_PENDING --> INVOICE_EXPIRED: Bước 2B: Quá hạn thanh toán 3 ngày
-        
-        state CompensatingTransaction {
-            INVOICE_EXPIRED --> PENALIZE_WINNER: 1. Ghi nhận vi phạm và xử lý tiền cọc
-            PENALIZE_WINNER --> CANCEL_INVOICE: 2. Hủy hóa đơn cũ
-            CANCEL_INVOICE --> FALLBACK_RUNNER_UP: 3. Gửi đề nghị mua cho người kế tiếp
-        }
-        FALLBACK_RUNNER_UP --> INVOICE_PENDING: Khi người kế tiếp chấp nhận, tạo hóa đơn
-    }
+    INVOICE_PENDING --> INVOICE_EXPIRED: Bước 2B: Quá hạn thanh toán 3 ngày
+    INVOICE_EXPIRED --> PENALIZE_WINNER: 1. Ghi nhận vi phạm và xử lý tiền cọc
+    PENALIZE_WINNER --> CANCEL_INVOICE: 2. Hủy hóa đơn cũ
+    CANCEL_INVOICE --> FALLBACK_RUNNER_UP: 3. Gửi đề nghị mua cho người kế tiếp
+    FALLBACK_RUNNER_UP --> INVOICE_PENDING: Người kế tiếp chấp nhận
 ```
 
 #### B. Quy trình xử lý khi quá hạn
