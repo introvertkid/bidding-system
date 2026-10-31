@@ -24,7 +24,11 @@ export class DepositsService {
   /**
    * Đặt cọc giả lập để tham gia phiên đấu giá
    */
-  async deposit(auctionId: string, userId: string, customAmount?: number): Promise<Deposit> {
+  async deposit(
+    auctionId: string,
+    userId: string,
+    customAmount?: number,
+  ): Promise<Deposit> {
     const auction = await this.auctionsRepository.findOne({
       where: { id: auctionId },
     });
@@ -37,7 +41,9 @@ export class DepositsService {
       auction.status !== AuctionStatus.UPCOMING &&
       auction.status !== AuctionStatus.ACTIVE
     ) {
-      throw new BadRequestException('Phiên đấu giá không ở trạng thái chấp nhận đặt cọc');
+      throw new BadRequestException(
+        'Phiên đấu giá không ở trạng thái chấp nhận đặt cọc',
+      );
     }
 
     const existingDeposit = await this.depositsRepository.findOne({
@@ -53,7 +59,8 @@ export class DepositsService {
       Math.round(Number(auction.startingPrice) * 0.1),
       50_000,
     );
-    const amount = customAmount && customAmount > 0 ? customAmount : defaultDepositAmount;
+    const amount =
+      customAmount && customAmount > 0 ? customAmount : defaultDepositAmount;
 
     if (existingDeposit) {
       existingDeposit.amount = amount;
@@ -93,7 +100,10 @@ export class DepositsService {
   /**
    * Hoàn cọc cho tất cả những người tham gia bị thua cuộc
    */
-  async refundNonWinners(auctionId: string, winnerId?: string): Promise<number> {
+  async refundNonWinners(
+    auctionId: string,
+    winnerId?: string,
+  ): Promise<number> {
     const query = this.depositsRepository
       .createQueryBuilder()
       .update(Deposit)
@@ -106,7 +116,9 @@ export class DepositsService {
     }
 
     const result = await query.execute();
-    this.logger.log(`Hoàn cọc thành công cho ${result.affected ?? 0} người thua tại phiên ${auctionId}`);
+    this.logger.log(
+      `Hoàn cọc thành công cho ${result.affected ?? 0} người thua tại phiên ${auctionId}`,
+    );
     return result.affected ?? 0;
   }
 
@@ -120,7 +132,9 @@ export class DepositsService {
     );
     const success = (result.affected ?? 0) > 0;
     if (success) {
-      this.logger.warn(`Đã tịch thu tiền cọc của user ${userId} tại phiên ${auctionId}`);
+      this.logger.warn(
+        `Đã tịch thu tiền cọc của user ${userId} tại phiên ${auctionId}`,
+      );
     }
     return success;
   }

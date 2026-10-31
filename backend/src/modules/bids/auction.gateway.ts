@@ -62,8 +62,9 @@ export class AuctionGateway implements OnGatewayConnection {
 
   // Client gửi token lúc kết nối (auth.token) để nhận thông báo riêng; không có token vẫn xem giá được
   async handleConnection(client: Socket) {
-    const token = client.handshake.auth?.token;
-    if (typeof token !== 'string' || !token) return;
+    const auth = client.handshake.auth as Record<string, unknown> | undefined;
+    const token = typeof auth?.token === 'string' ? auth.token : undefined;
+    if (!token) return;
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
       await client.join(userRoom(payload.sub));

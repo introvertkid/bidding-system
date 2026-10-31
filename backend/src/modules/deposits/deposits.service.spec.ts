@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -91,7 +95,10 @@ describe('DepositsService', () => {
       });
       depositsRepository.findOne!.mockResolvedValue(null);
       depositsRepository.create!.mockImplementation((dto) => dto);
-      depositsRepository.save!.mockImplementation(async (d) => ({ id: 'dep-new', ...d }));
+      depositsRepository.save!.mockImplementation(async (d) => ({
+        id: 'dep-new',
+        ...d,
+      }));
 
       const result = await service.deposit('auc-1', 'user-1');
       expect(result.amount).toBe(1_000_000);
@@ -107,7 +114,10 @@ describe('DepositsService', () => {
       });
       depositsRepository.findOne!.mockResolvedValue(null);
       depositsRepository.create!.mockImplementation((dto) => dto);
-      depositsRepository.save!.mockImplementation(async (d) => ({ id: 'dep-new', ...d }));
+      depositsRepository.save!.mockImplementation(async (d) => ({
+        id: 'dep-new',
+        ...d,
+      }));
 
       const result = await service.deposit('auc-1', 'user-1');
       expect(result.amount).toBe(50_000);
@@ -137,18 +147,28 @@ describe('DepositsService', () => {
 
   describe('getDeposit', () => {
     it('returns deposit for auction and user', async () => {
-      const mockDeposit = { id: 'dep-1', auctionId: 'auc-1', userId: 'user-1', status: DepositStatus.HELD };
+      const mockDeposit = {
+        id: 'dep-1',
+        auctionId: 'auc-1',
+        userId: 'user-1',
+        status: DepositStatus.HELD,
+      };
       depositsRepository.findOne!.mockResolvedValue(mockDeposit);
 
       const result = await service.getDeposit('auc-1', 'user-1');
       expect(result).toEqual(mockDeposit);
-      expect(depositsRepository.findOne).toHaveBeenCalledWith({ where: { auctionId: 'auc-1', userId: 'user-1' } });
+      expect(depositsRepository.findOne).toHaveBeenCalledWith({
+        where: { auctionId: 'auc-1', userId: 'user-1' },
+      });
     });
   });
 
   describe('hasActiveDeposit', () => {
     it('returns true if HELD deposit exists', async () => {
-      depositsRepository.findOne!.mockResolvedValue({ id: 'dep-1', status: DepositStatus.HELD });
+      depositsRepository.findOne!.mockResolvedValue({
+        id: 'dep-1',
+        status: DepositStatus.HELD,
+      });
       const res = await service.hasActiveDeposit('auc-1', 'user-1');
       expect(res).toBe(true);
     });
@@ -173,7 +193,9 @@ describe('DepositsService', () => {
 
       const affected = await service.refundNonWinners('auc-1', 'winner-1');
       expect(affected).toBe(3);
-      expect(qb.andWhere).toHaveBeenCalledWith('user_id != :winnerId', { winnerId: 'winner-1' });
+      expect(qb.andWhere).toHaveBeenCalledWith('user_id != :winnerId', {
+        winnerId: 'winner-1',
+      });
     });
 
     it('refunds all deposits when no winnerId is provided (e.g. failed auction)', async () => {
@@ -188,8 +210,12 @@ describe('DepositsService', () => {
 
       const affected = await service.refundNonWinners('auc-1');
       expect(affected).toBe(2);
-      expect(qb.where).toHaveBeenCalledWith('auction_id = :auctionId', { auctionId: 'auc-1' });
-      expect(qb.andWhere).toHaveBeenCalledWith('status = :heldStatus', { heldStatus: DepositStatus.HELD });
+      expect(qb.where).toHaveBeenCalledWith('auction_id = :auctionId', {
+        auctionId: 'auc-1',
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('status = :heldStatus', {
+        heldStatus: DepositStatus.HELD,
+      });
     });
   });
 

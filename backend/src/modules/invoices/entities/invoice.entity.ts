@@ -24,7 +24,9 @@ export class Invoice {
   @Column({ name: 'auction_id' })
   auctionId: string;
 
-  @ManyToOne(() => Auction, (auction) => auction.invoices, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Auction, (auction) => auction.invoices, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'auction_id' })
   auction: Auction;
 

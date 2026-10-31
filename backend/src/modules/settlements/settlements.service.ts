@@ -7,7 +7,12 @@ import {
 } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, LessThanOrEqual, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  LessThanOrEqual,
+  Repository,
+} from 'typeorm';
 import { Auction, AuctionStatus } from '../auctions/entities/auction.entity';
 import { AuctionGateway } from '../bids/auction.gateway';
 import { Bid, BidStatus } from '../bids/entities/bid.entity';
@@ -62,13 +67,19 @@ export class SettlementsService {
 
       if (!expiredAuctions.length) return;
 
-      this.logger.log(`[Saga Settlement] Phát hiện ${expiredAuctions.length} phiên đã hết giờ cần chốt`);
+      this.logger.log(
+        `[Saga Settlement] Phát hiện ${expiredAuctions.length} phiên đã hết giờ cần chốt`,
+      );
 
       for (const auction of expiredAuctions) {
         await this.settleExpiredAuction(auction);
       }
-    } catch (err: any) {
-      this.logger.error(`Lỗi trong tiến trình closeExpiredAuctions: ${err.message}`, err.stack);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `Lỗi trong tiến trình closeExpiredAuctions: ${error.message}`,
+        error.stack,
+      );
     } finally {
       this.isClosingAuctions = false;
     }
@@ -83,24 +94,36 @@ export class SettlementsService {
 
       if (hasWinner) {
         // 1. Chuyển trạng thái phiên sang ENDED
-        await manager.update(Auction, { id: auction.id }, { status: AuctionStatus.ENDED });
+        await manager.update(
+          Auction,
+          { id: auction.id },
+          { status: AuctionStatus.ENDED },
+        );
 
         // Tìm bid chiến thắng
         const winningBid = await manager.findOne(Bid, {
-          where: { auctionId: auction.id, bidderId: auction.highestBidderId!, status: BidStatus.VALID },
+          where: {
+            auctionId: auction.id,
+            bidderId: auction.highestBidderId,
+            status: BidStatus.VALID,
+          },
           order: { amount: 'DESC' },
         });
 
         // 2. Tạo hóa đơn cho người trúng đấu giá (thời hạn thanh toán 3 ngày)
         const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
         let invoice = await manager.findOne(Invoice, {
-          where: { auctionId: auction.id, winnerId: auction.highestBidderId!, status: InvoiceStatus.PENDING },
+          where: {
+            auctionId: auction.id,
+            winnerId: auction.highestBidderId,
+            status: InvoiceStatus.PENDING,
+          },
         });
 
         if (!invoice) {
           invoice = manager.create(Invoice, {
             auctionId: auction.id,
-            winnerId: auction.highestBidderId!,
+            winnerId: auction.highestBidderId,
             amount: auction.currentPrice,
             status: InvoiceStatus.PENDING,
             dueDate,
@@ -135,7 +158,9 @@ export class SettlementsService {
           .update(Deposit)
           .set({ status: DepositStatus.REFUNDED })
           .where('auction_id = :auctionId', { auctionId: auction.id })
-          .andWhere('user_id != :winnerId', { winnerId: auction.highestBidderId })
+          .andWhere('user_id != :winnerId', {
+            winnerId: auction.highestBidderId,
+          })
           .andWhere('status = :heldStatus', { heldStatus: DepositStatus.HELD })
           .execute();
 
@@ -143,11 +168,11 @@ export class SettlementsService {
         this.auctionGateway.emitAuctionEnded(auction.id, {
           auctionId: auction.id,
           status: 'ENDED',
-          winnerId: auction.highestBidderId!,
+          winnerId: auction.highestBidderId,
           finalPrice: Number(auction.currentPrice),
         });
 
-        this.auctionGateway.emitInvoiceCreated(auction.highestBidderId!, {
+        this.auctionGateway.emitInvoiceCreated(auction.highestBidderId, {
           invoiceId: invoice.id,
           auctionId: auction.id,
           amount: Number(invoice.amount),
@@ -159,7 +184,11 @@ export class SettlementsService {
         );
       } else {
         // Không ai tham gia bid -> FAILED
-        await manager.update(Auction, { id: auction.id }, { status: AuctionStatus.FAILED });
+        await manager.update(
+          Auction,
+          { id: auction.id },
+          { status: AuctionStatus.FAILED },
+        );
 
         let settlement = await manager.findOne(Settlement, {
           where: { auctionId: auction.id },
@@ -193,7 +222,9 @@ export class SettlementsService {
           status: 'FAILED',
         });
 
-        this.logger.log(`Phiên ${auction.id} kết thúc FAILED do không có lượt đặt giá nào.`);
+        this.logger.log(
+          `Phiên ${auction.id} kết thúc FAILED do không có lượt đặt giá nào.`,
+        );
       }
     });
   }
@@ -224,13 +255,19 @@ export class SettlementsService {
 
       if (!overdueInvoices.length) return;
 
-      this.logger.warn(`[Saga Settlement] Phát hiện ${overdueInvoices.length} hóa đơn quá hạn cần xử lý bù trừ`);
+      this.logger.warn(
+        `[Saga Settlement] Phát hiện ${overdueInvoices.length} hóa đơn quá hạn cần xử lý bù trừ`,
+      );
 
       for (const invoice of overdueInvoices) {
         await this.handleSingleOverdueInvoice(invoice);
       }
-    } catch (err: any) {
-      this.logger.error(`Lỗi trong tiến trình handleOverdueInvoices: ${err.message}`, err.stack);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `Lỗi trong tiến trình handleOverdueInvoices: ${error.message}`,
+        error.stack,
+      );
     } finally {
       this.isProcessingOverdue = false;
     }
@@ -248,23 +285,37 @@ export class SettlementsService {
       // 2. Tịch thu tiền cọc người thắng (phạt vi phạm)
       await manager.update(
         Deposit,
-        { auctionId: invoice.auctionId, userId: invoice.winnerId, status: DepositStatus.HELD },
+        {
+          auctionId: invoice.auctionId,
+          userId: invoice.winnerId,
+          status: DepositStatus.HELD,
+        },
         { status: DepositStatus.FORFEITED },
       );
 
       // 3. Ghi nhận vi phạm tài khoản người thắng
-      const violator = await manager.findOne(User, { where: { id: invoice.winnerId } });
+      const violator = await manager.findOne(User, {
+        where: { id: invoice.winnerId },
+      });
       if (violator) {
         this.logger.warn(
           `Ghi nhận vi phạm quá hạn thanh toán đối với user ${violator.email} (${violator.id}) tại phiên ${invoice.auctionId}`,
         );
         // Tùy chính sách hệ thống: giảm điểm uy tín
         const newScore = Math.max(0, Number(violator.ratingScore) - 1.0);
-        await manager.update(User, { id: violator.id }, { ratingScore: newScore });
+        await manager.update(
+          User,
+          { id: violator.id },
+          { ratingScore: newScore },
+        );
       }
 
       // 4. Tìm kiếm Á quân (Runner-up) kế tiếp
-      await this.findAndInviteNextRunnerUp(manager, invoice.auctionId, invoice.auction?.product?.title);
+      await this.findAndInviteNextRunnerUp(
+        manager,
+        invoice.auctionId,
+        invoice.auction?.product?.title,
+      );
     });
   }
 
@@ -288,19 +339,31 @@ export class SettlementsService {
 
       if (!expiredOffers.length) return;
 
-      this.logger.log(`[Saga Settlement] Phát hiện ${expiredOffers.length} lời mời mua bị quá hạn`);
+      this.logger.log(
+        `[Saga Settlement] Phát hiện ${expiredOffers.length} lời mời mua bị quá hạn`,
+      );
 
       for (const offer of expiredOffers) {
         await this.dataSource.transaction(async (manager) => {
           offer.status = OfferStatus.EXPIRED;
           await manager.save(Offer, offer);
 
-          this.logger.log(`Lời mời ${offer.id} cho user ${offer.bidderId} đã hết hạn. Chuyển sang người tiếp theo.`);
-          await this.findAndInviteNextRunnerUp(manager, offer.auctionId, offer.auction?.product?.title);
+          this.logger.log(
+            `Lời mời ${offer.id} cho user ${offer.bidderId} đã hết hạn. Chuyển sang người tiếp theo.`,
+          );
+          await this.findAndInviteNextRunnerUp(
+            manager,
+            offer.auctionId,
+            offer.auction?.product?.title,
+          );
         });
       }
-    } catch (err: any) {
-      this.logger.error(`Lỗi trong tiến trình handleExpiredOffers: ${err.message}`, err.stack);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `Lỗi trong tiến trình handleExpiredOffers: ${error.message}`,
+        error.stack,
+      );
     } finally {
       this.isProcessingExpiredOffers = false;
     }
@@ -314,7 +377,9 @@ export class SettlementsService {
     auctionId: string,
     productTitle?: string,
   ): Promise<Offer | null> {
-    let settlement = await manager.findOne(Settlement, { where: { auctionId } });
+    let settlement = await manager.findOne(Settlement, {
+      where: { auctionId },
+    });
     if (!settlement) {
       settlement = manager.create(Settlement, {
         auctionId,
@@ -394,14 +459,20 @@ export class SettlementsService {
       settlement.failureReason = 'NO_ELIGIBLE_RUNNER_UP';
       await manager.save(Settlement, settlement);
 
-      await manager.update(Auction, { id: auctionId }, { status: AuctionStatus.FAILED });
+      await manager.update(
+        Auction,
+        { id: auctionId },
+        { status: AuctionStatus.FAILED },
+      );
 
       this.auctionGateway.emitAuctionEnded(auctionId, {
         auctionId,
         status: 'FAILED',
       });
 
-      this.logger.warn(`Phiên ${auctionId} không còn runner-up nào hợp lệ -> chuyển FAILED`);
+      this.logger.warn(
+        `Phiên ${auctionId} không còn runner-up nào hợp lệ -> chuyển FAILED`,
+      );
       return null;
     }
   }
@@ -439,7 +510,9 @@ export class SettlementsService {
     }
 
     if (offer.status !== OfferStatus.PENDING) {
-      throw new BadRequestException(`Lời mời đã ở trạng thái ${offer.status}, không thể chấp nhận`);
+      throw new BadRequestException(
+        `Lời mời đã ở trạng thái ${offer.status}, không thể chấp nhận`,
+      );
     }
 
     const now = new Date();
@@ -526,17 +599,24 @@ export class SettlementsService {
     }
 
     if (offer.status !== OfferStatus.PENDING) {
-      throw new BadRequestException(`Lời mời đã ở trạng thái ${offer.status}, không thể từ chối`);
+      throw new BadRequestException(
+        `Lời mời đã ở trạng thái ${offer.status}, không thể từ chối`,
+      );
     }
 
     return this.dataSource.transaction(async (manager) => {
       offer.status = OfferStatus.DECLINED;
       await manager.save(Offer, offer);
 
-      this.logger.log(`User ${userId} đã từ chối offer ${offerId}. Chuyển sang runner-up kế tiếp.`);
+      this.logger.log(
+        `User ${userId} đã từ chối offer ${offerId}. Chuyển sang runner-up kế tiếp.`,
+      );
 
       // Tự động tìm và mời người kế tiếp
-      const nextOffer = await this.findAndInviteNextRunnerUp(manager, offer.auctionId);
+      const nextOffer = await this.findAndInviteNextRunnerUp(
+        manager,
+        offer.auctionId,
+      );
 
       return {
         message: 'Đã từ chối lời mời mua thành công',

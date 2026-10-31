@@ -7,7 +7,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { DepositsService } from '../deposits/deposits.service';
-import { Settlement, SettlementStatus } from '../settlements/entities/settlement.entity';
+import {
+  Settlement,
+  SettlementStatus,
+} from '../settlements/entities/settlement.entity';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 import { InvoicesService } from './invoices.service';
 
@@ -177,7 +180,9 @@ describe('InvoicesService', () => {
       invoicesRepository.findOne!.mockResolvedValue(mockInvoice);
 
       const mockManager = {
-        save: jest.fn().mockImplementation((entityClass, inv) => Promise.resolve(inv)),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, inv) => Promise.resolve(inv)),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
       };
 
@@ -191,7 +196,10 @@ describe('InvoicesService', () => {
         { auctionId: 'auc-1' },
         { status: SettlementStatus.SETTLED, step: 'COMPLETED' },
       );
-      expect(depositsService.refundWinner).toHaveBeenCalledWith('auc-1', 'user-1');
+      expect(depositsService.refundWinner).toHaveBeenCalledWith(
+        'auc-1',
+        'user-1',
+      );
     });
   });
 });

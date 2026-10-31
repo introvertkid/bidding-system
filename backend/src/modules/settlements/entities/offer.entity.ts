@@ -29,14 +29,18 @@ export class Offer {
   @Column({ name: 'settlement_id' })
   settlementId: string;
 
-  @ManyToOne(() => Settlement, (settlement) => settlement.offers, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Settlement, (settlement) => settlement.offers, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'settlement_id' })
   settlement: Settlement;
 
   @Column({ name: 'auction_id' })
   auctionId: string;
 
-  @ManyToOne(() => Auction, (auction) => auction.offers, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Auction, (auction) => auction.offers, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'auction_id' })
   auction: Auction;
 

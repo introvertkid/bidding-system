@@ -54,7 +54,9 @@ describe('DepositsController', () => {
 
       service.deposit.mockResolvedValue(mockDeposit);
 
-      const result = await controller.createDeposit('auc-1', 'user-1', { amount: 500_000 });
+      const result = await controller.createDeposit('auc-1', 'user-1', {
+        amount: 500_000,
+      });
 
       expect(service.deposit).toHaveBeenCalledWith('auc-1', 'user-1', 500_000);
       expect(result).toEqual({

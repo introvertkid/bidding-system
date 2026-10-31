@@ -27,7 +27,11 @@ export class DepositsController {
     @CurrentUserId() userId: string,
     @Body() dto: CreateDepositDto,
   ) {
-    const deposit = await this.depositsService.deposit(auctionId, userId, dto?.amount);
+    const deposit = await this.depositsService.deposit(
+      auctionId,
+      userId,
+      dto?.amount,
+    );
     return {
       status: 'success',
       message: 'Đặt cọc tham gia phiên đấu giá thành công',

@@ -1,10 +1,14 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Auction, AuctionStatus } from '../auctions/entities/auction.entity';
 import { AuctionGateway } from '../bids/auction.gateway';
-import { Bid, BidStatus } from '../bids/entities/bid.entity';
+import { Bid } from '../bids/entities/bid.entity';
 import { DepositsService } from '../deposits/deposits.service';
 import { Deposit, DepositStatus } from '../deposits/entities/deposit.entity';
 import { Invoice, InvoiceStatus } from '../invoices/entities/invoice.entity';
@@ -125,9 +129,13 @@ describe('SettlementsService', () => {
     });
 
     it('settles all found expired auctions', async () => {
-      const mockAuctions = [{ id: 'auc-1', status: AuctionStatus.ACTIVE }] as Auction[];
+      const mockAuctions = [
+        { id: 'auc-1', status: AuctionStatus.ACTIVE },
+      ] as Auction[];
       auctionsRepo.find!.mockResolvedValue(mockAuctions);
-      const settleSpy = jest.spyOn(service, 'settleExpiredAuction').mockResolvedValue(undefined);
+      const settleSpy = jest
+        .spyOn(service, 'settleExpiredAuction')
+        .mockResolvedValue(undefined);
 
       await service.closeExpiredAuctions();
       expect(settleSpy).toHaveBeenCalledWith(mockAuctions[0]);
@@ -167,7 +175,11 @@ describe('SettlementsService', () => {
           return Promise.resolve(null);
         }),
         create: jest.fn().mockImplementation((entityClass, data) => data),
-        save: jest.fn().mockImplementation((entityClass, data) => Promise.resolve({ id: 'saved-id', ...data })),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, data) =>
+            Promise.resolve({ id: 'saved-id', ...data }),
+          ),
         createQueryBuilder: jest.fn().mockReturnValue(mockQb),
       };
 
@@ -175,7 +187,11 @@ describe('SettlementsService', () => {
 
       await service.settleExpiredAuction(mockAuction);
 
-      expect(mockManager.update).toHaveBeenCalledWith(Auction, { id: 'auc-1' }, { status: AuctionStatus.ENDED });
+      expect(mockManager.update).toHaveBeenCalledWith(
+        Auction,
+        { id: 'auc-1' },
+        { status: AuctionStatus.ENDED },
+      );
       expect(mockManager.create).toHaveBeenCalledWith(
         Invoice,
         expect.objectContaining({
@@ -239,11 +255,14 @@ describe('SettlementsService', () => {
         findOne: jest.fn().mockImplementation((entityClass) => {
           if (entityClass === Bid) return Promise.resolve(null);
           if (entityClass === Invoice) return Promise.resolve(existingInvoice);
-          if (entityClass === Settlement) return Promise.resolve(existingSettlement);
+          if (entityClass === Settlement)
+            return Promise.resolve(existingSettlement);
           return Promise.resolve(null);
         }),
         create: jest.fn().mockImplementation((entityClass, data) => data),
-        save: jest.fn().mockImplementation((entityClass, data) => Promise.resolve(data)),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, data) => Promise.resolve(data)),
         createQueryBuilder: jest.fn().mockReturnValue(mockQb),
       };
 
@@ -253,7 +272,10 @@ describe('SettlementsService', () => {
 
       expect(existingSettlement.winnerId).toBe('winner-1');
       expect(existingSettlement.status).toBe(SettlementStatus.INVOICE_PENDING);
-      expect(mockManager.save).toHaveBeenCalledWith(Settlement, existingSettlement);
+      expect(mockManager.save).toHaveBeenCalledWith(
+        Settlement,
+        existingSettlement,
+      );
     });
 
     it('marks auction FAILED and creates FAILED settlement if there were no bids', async () => {
@@ -276,7 +298,11 @@ describe('SettlementsService', () => {
         update: jest.fn().mockResolvedValue({ affected: 1 }),
         findOne: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockImplementation((entityClass, data) => data),
-        save: jest.fn().mockImplementation((entityClass, data) => Promise.resolve({ id: 'set-id', ...data })),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, data) =>
+            Promise.resolve({ id: 'set-id', ...data }),
+          ),
         createQueryBuilder: jest.fn().mockReturnValue(mockQb),
       };
 
@@ -284,7 +310,11 @@ describe('SettlementsService', () => {
 
       await service.settleExpiredAuction(mockAuction);
 
-      expect(mockManager.update).toHaveBeenCalledWith(Auction, { id: 'auc-no-bids' }, { status: AuctionStatus.FAILED });
+      expect(mockManager.update).toHaveBeenCalledWith(
+        Auction,
+        { id: 'auc-no-bids' },
+        { status: AuctionStatus.FAILED },
+      );
       expect(mockManager.create).toHaveBeenCalledWith(
         Settlement,
         expect.objectContaining({
@@ -293,10 +323,13 @@ describe('SettlementsService', () => {
           failureReason: 'NO_BIDS',
         }),
       );
-      expect(auctionGateway.emitAuctionEnded).toHaveBeenCalledWith('auc-no-bids', {
-        auctionId: 'auc-no-bids',
-        status: 'FAILED',
-      });
+      expect(auctionGateway.emitAuctionEnded).toHaveBeenCalledWith(
+        'auc-no-bids',
+        {
+          auctionId: 'auc-no-bids',
+          status: 'FAILED',
+        },
+      );
     });
 
     it('updates existing settlement to FAILED if auction had no bids and settlement existed', async () => {
@@ -323,7 +356,9 @@ describe('SettlementsService', () => {
       const mockManager = {
         update: jest.fn().mockResolvedValue({ affected: 1 }),
         findOne: jest.fn().mockResolvedValue(existingSettlement),
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve(d)),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) => Promise.resolve(d)),
         createQueryBuilder: jest.fn().mockReturnValue(mockQb),
       };
 
@@ -351,9 +386,13 @@ describe('SettlementsService', () => {
     });
 
     it('processes each overdue invoice', async () => {
-      const mockInvoices = [{ id: 'inv-1', status: InvoiceStatus.PENDING }] as Invoice[];
+      const mockInvoices = [
+        { id: 'inv-1', status: InvoiceStatus.PENDING },
+      ] as Invoice[];
       invoicesRepo.find!.mockResolvedValue(mockInvoices);
-      const handleSpy = jest.spyOn(service, 'handleSingleOverdueInvoice').mockResolvedValue(undefined);
+      const handleSpy = jest
+        .spyOn(service, 'handleSingleOverdueInvoice')
+        .mockResolvedValue(undefined);
 
       await service.handleOverdueInvoices();
       expect(handleSpy).toHaveBeenCalledWith(mockInvoices[0]);
@@ -392,11 +431,19 @@ describe('SettlementsService', () => {
       };
 
       const mockManager = {
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve({ id: 'saved-id', ...d })),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) =>
+            Promise.resolve({ id: 'saved-id', ...d }),
+          ),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
-        findOne: jest.fn().mockImplementation((entityClass, opts) => {
+        findOne: jest.fn().mockImplementation((entityClass) => {
           if (entityClass === User) {
-            return Promise.resolve({ id: 'winner-1', email: 'winner@test.com', ratingScore: 5.0 });
+            return Promise.resolve({
+              id: 'winner-1',
+              email: 'winner@test.com',
+              ratingScore: 5.0,
+            });
           }
           if (entityClass === Settlement) {
             return Promise.resolve(mockSettlement);
@@ -405,10 +452,11 @@ describe('SettlementsService', () => {
         }),
         find: jest.fn().mockImplementation((entityClass) => {
           if (entityClass === Offer) return Promise.resolve([]);
-          if (entityClass === Bid) return Promise.resolve([
-            { id: 'bid-win', bidderId: 'winner-1', amount: 5_000_000 },
-            mockRunnerUpBid,
-          ]);
+          if (entityClass === Bid)
+            return Promise.resolve([
+              { id: 'bid-win', bidderId: 'winner-1', amount: 5_000_000 },
+              mockRunnerUpBid,
+            ]);
           return Promise.resolve([]);
         }),
         create: jest.fn().mockImplementation((entityClass, data) => data),
@@ -468,18 +516,22 @@ describe('SettlementsService', () => {
       };
 
       const mockManager = {
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve(d)),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) => Promise.resolve(d)),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
         findOne: jest.fn().mockImplementation((entityClass) => {
           if (entityClass === User) return Promise.resolve(null);
-          if (entityClass === Settlement) return Promise.resolve(mockSettlement);
+          if (entityClass === Settlement)
+            return Promise.resolve(mockSettlement);
           return Promise.resolve(null);
         }),
         find: jest.fn().mockImplementation((entityClass) => {
           if (entityClass === Offer) return Promise.resolve([]);
-          if (entityClass === Bid) return Promise.resolve([
-            { id: 'bid-win', bidderId: 'winner-1', amount: 5_000_000 },
-          ]); // only winner's bid, no other bidders!
+          if (entityClass === Bid)
+            return Promise.resolve([
+              { id: 'bid-win', bidderId: 'winner-1', amount: 5_000_000 },
+            ]); // only winner's bid, no other bidders!
           return Promise.resolve([]);
         }),
         create: jest.fn().mockImplementation((entityClass, data) => data),
@@ -490,7 +542,11 @@ describe('SettlementsService', () => {
       await service.handleSingleOverdueInvoice(mockInvoice);
 
       expect(mockSettlement.status).toBe(SettlementStatus.FAILED);
-      expect(mockManager.update).toHaveBeenCalledWith(Auction, { id: 'auc-1' }, { status: AuctionStatus.FAILED });
+      expect(mockManager.update).toHaveBeenCalledWith(
+        Auction,
+        { id: 'auc-1' },
+        { status: AuctionStatus.FAILED },
+      );
       expect(auctionGateway.emitAuctionEnded).toHaveBeenCalledWith('auc-1', {
         auctionId: 'auc-1',
         status: 'FAILED',
@@ -525,7 +581,9 @@ describe('SettlementsService', () => {
 
       const mockManager = {
         save: jest.fn().mockResolvedValue(mockExpiredOffer),
-        findOne: jest.fn().mockResolvedValue({ id: 'set-1', auctionId: 'auc-1' }),
+        findOne: jest
+          .fn()
+          .mockResolvedValue({ id: 'set-1', auctionId: 'auc-1' }),
         find: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockImplementation((entityClass, d) => d),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -550,32 +608,62 @@ describe('SettlementsService', () => {
       const mockManager = {
         findOne: jest.fn().mockResolvedValue(null), // no settlement
         create: jest.fn().mockImplementation((entityClass, d) => d),
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve({ id: 'new-set-id', ...d })),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) =>
+            Promise.resolve({ id: 'new-set-id', ...d }),
+          ),
         find: jest.fn().mockImplementation((entityClass) => {
           if (entityClass === Offer) return Promise.resolve([]);
-          if (entityClass === Bid) return Promise.resolve([
-            { id: 'bid-1', bidderId: 'runner-up-1', amount: 3_000_000, bidder: { accountStatus: AccountStatus.ACTIVE } },
-          ]);
+          if (entityClass === Bid)
+            return Promise.resolve([
+              {
+                id: 'bid-1',
+                bidderId: 'runner-up-1',
+                amount: 3_000_000,
+                bidder: { accountStatus: AccountStatus.ACTIVE },
+              },
+            ]);
           return Promise.resolve([]);
         }),
       } as any;
 
-      const offer = await service.findAndInviteNextRunnerUp(mockManager, 'auc-1', 'Product Title');
+      const offer = await service.findAndInviteNextRunnerUp(
+        mockManager,
+        'auc-1',
+        'Product Title',
+      );
       expect(offer).toBeDefined();
       expect(offer!.bidderId).toBe('runner-up-1');
     });
 
     it('excludes bidders with previous offers and skips BANNED bidders', async () => {
-      const mockSettlement = { id: 'set-1', auctionId: 'auc-1', winnerId: 'winner-1' };
-      const previousOffers = [
-        { bidderId: 'prev-declined-runner' },
-      ];
+      const mockSettlement = {
+        id: 'set-1',
+        auctionId: 'auc-1',
+        winnerId: 'winner-1',
+      };
+      const previousOffers = [{ bidderId: 'prev-declined-runner' }];
 
       const bids = [
         { id: 'b-win', bidderId: 'winner-1', amount: 10_000_000 },
-        { id: 'b-declined', bidderId: 'prev-declined-runner', amount: 9_000_000 },
-        { id: 'b-banned', bidderId: 'banned-runner', amount: 8_000_000, bidder: { accountStatus: AccountStatus.BANNED } },
-        { id: 'b-valid', bidderId: 'valid-runner-3', amount: 7_000_000, bidder: { accountStatus: AccountStatus.ACTIVE } },
+        {
+          id: 'b-declined',
+          bidderId: 'prev-declined-runner',
+          amount: 9_000_000,
+        },
+        {
+          id: 'b-banned',
+          bidderId: 'banned-runner',
+          amount: 8_000_000,
+          bidder: { accountStatus: AccountStatus.BANNED },
+        },
+        {
+          id: 'b-valid',
+          bidderId: 'valid-runner-3',
+          amount: 7_000_000,
+          bidder: { accountStatus: AccountStatus.ACTIVE },
+        },
       ];
 
       const mockManager = {
@@ -586,10 +674,18 @@ describe('SettlementsService', () => {
           return Promise.resolve([]);
         }),
         create: jest.fn().mockImplementation((entityClass, d) => d),
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve({ id: 'off-valid', ...d })),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) =>
+            Promise.resolve({ id: 'off-valid', ...d }),
+          ),
       } as any;
 
-      const offer = await service.findAndInviteNextRunnerUp(mockManager, 'auc-1', 'Product');
+      const offer = await service.findAndInviteNextRunnerUp(
+        mockManager,
+        'auc-1',
+        'Product',
+      );
       expect(offer).toBeDefined();
       expect(offer!.bidderId).toBe('valid-runner-3');
       expect(offer!.offeredPrice).toBe(7_000_000);
@@ -655,7 +751,9 @@ describe('SettlementsService', () => {
 
       const mockManager = {
         save: jest.fn().mockResolvedValue(mockExpiredOffer),
-        findOne: jest.fn().mockResolvedValue({ id: 'set-1', auctionId: 'auc-1' }),
+        findOne: jest
+          .fn()
+          .mockResolvedValue({ id: 'set-1', auctionId: 'auc-1' }),
         find: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockImplementation((entityClass, d) => d),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -683,7 +781,11 @@ describe('SettlementsService', () => {
       offersRepo.findOne!.mockResolvedValue(mockOffer);
 
       const mockManager = {
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve({ id: 'inv-new', ...d })),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) =>
+            Promise.resolve({ id: 'inv-new', ...d }),
+          ),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
         create: jest.fn().mockImplementation((entityClass, d) => d),
       };
@@ -719,14 +821,21 @@ describe('SettlementsService', () => {
     });
 
     it('throws ForbiddenException if user is not the recipient', async () => {
-      offersRepo.findOne!.mockResolvedValue({ id: 'off-1', bidderId: 'other-user' });
+      offersRepo.findOne!.mockResolvedValue({
+        id: 'off-1',
+        bidderId: 'other-user',
+      });
       await expect(service.declineOffer('off-1', 'user-1')).rejects.toThrow(
         ForbiddenException,
       );
     });
 
     it('throws BadRequestException if offer is not PENDING', async () => {
-      offersRepo.findOne!.mockResolvedValue({ id: 'off-1', bidderId: 'user-1', status: OfferStatus.ACCEPTED });
+      offersRepo.findOne!.mockResolvedValue({
+        id: 'off-1',
+        bidderId: 'user-1',
+        status: OfferStatus.ACCEPTED,
+      });
       await expect(service.declineOffer('off-1', 'user-1')).rejects.toThrow(
         BadRequestException,
       );
@@ -743,8 +852,12 @@ describe('SettlementsService', () => {
       offersRepo.findOne!.mockResolvedValue(mockOffer);
 
       const mockManager = {
-        save: jest.fn().mockImplementation((entityClass, d) => Promise.resolve(d)),
-        findOne: jest.fn().mockResolvedValue({ id: 'set-1', auctionId: 'auc-1' }),
+        save: jest
+          .fn()
+          .mockImplementation((entityClass, d) => Promise.resolve(d)),
+        findOne: jest
+          .fn()
+          .mockResolvedValue({ id: 'set-1', auctionId: 'auc-1' }),
         find: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
         create: jest.fn().mockImplementation((entityClass, d) => d),

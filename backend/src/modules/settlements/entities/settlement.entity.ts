@@ -31,7 +31,9 @@ export class Settlement {
   @Index()
   auctionId: string;
 
-  @OneToOne(() => Auction, (auction) => auction.settlement, { onDelete: 'CASCADE' })
+  @OneToOne(() => Auction, (auction) => auction.settlement, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'auction_id' })
   auction: Auction;
 

@@ -13,7 +13,10 @@ describe('DepositGuard', () => {
     guard = new DepositGuard(depositsService as unknown as DepositsService);
   });
 
-  const createMockContext = (userId?: string, auctionId?: string): ExecutionContext => {
+  const createMockContext = (
+    userId?: string,
+    auctionId?: string,
+  ): ExecutionContext => {
     return {
       switchToHttp: () => ({
         getRequest: () => ({
@@ -30,7 +33,10 @@ describe('DepositGuard', () => {
 
     const result = await guard.canActivate(context);
     expect(result).toBe(true);
-    expect(depositsService.hasActiveDeposit).toHaveBeenCalledWith('auc-1', 'user-1');
+    expect(depositsService.hasActiveDeposit).toHaveBeenCalledWith(
+      'auc-1',
+      'user-1',
+    );
   });
 
   it('throws ForbiddenException if user has not deposited', async () => {

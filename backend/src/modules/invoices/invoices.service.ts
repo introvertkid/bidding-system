@@ -8,7 +8,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { DepositsService } from '../deposits/deposits.service';
-import { Settlement, SettlementStatus } from '../settlements/entities/settlement.entity';
+import {
+  Settlement,
+  SettlementStatus,
+} from '../settlements/entities/settlement.entity';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 
 @Injectable()
@@ -83,12 +86,16 @@ export class InvoicesService {
     }
 
     if (invoice.status === InvoiceStatus.CANCELED) {
-      throw new BadRequestException('Hóa đơn này đã bị hủy do quá hạn thanh toán');
+      throw new BadRequestException(
+        'Hóa đơn này đã bị hủy do quá hạn thanh toán',
+      );
     }
 
     const now = new Date();
     if (invoice.dueDate < now) {
-      throw new BadRequestException('Hóa đơn đã quá hạn thanh toán (due date expired)');
+      throw new BadRequestException(
+        'Hóa đơn đã quá hạn thanh toán (due date expired)',
+      );
     }
 
     return this.dataSource.transaction(async (manager) => {
