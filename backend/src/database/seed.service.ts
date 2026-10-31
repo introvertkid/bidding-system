@@ -5,7 +5,10 @@ import { DataSource, EntityManager } from 'typeorm';
 import { defaultBidIncrement } from '../modules/auctions/auction-view';
 import { Auction, AuctionStatus } from '../modules/auctions/entities/auction.entity';
 import { Bid, BidStatus } from '../modules/bids/entities/bid.entity';
+import { Deposit, DepositStatus } from '../modules/deposits/entities/deposit.entity';
+import { Invoice, InvoiceStatus } from '../modules/invoices/entities/invoice.entity';
 import { Product } from '../modules/products/entities/product.entity';
+import { Settlement, SettlementStatus } from '../modules/settlements/entities/settlement.entity';
 import { User } from '../modules/users/entities/user.entity';
 
 const DEMO_PASSWORD = '123456';
@@ -80,11 +83,20 @@ export class SeedService implements OnApplicationBootstrap {
       const bids = item.bids ?? [];
       const lastBid = bids[bids.length - 1];
       const endTime = new Date(now + item.endIn);
+      const startTime = new Date(now + item.startIn);
+      const isEnded = endTime.getTime() < now;
+      const isUpcoming = startTime.getTime() > now;
+      const status = isEnded
+        ? AuctionStatus.ENDED
+        : isUpcoming
+          ? AuctionStatus.UPCOMING
+          : AuctionStatus.ACTIVE;
+
       const auction = await manager.save(
         manager.create(Auction, {
           productId: product.id,
-          status: endTime.getTime() < now ? AuctionStatus.ENDED : AuctionStatus.UPCOMING,
-          startTime: new Date(now + item.startIn),
+          status,
+          startTime,
           endTime,
           startingPrice: item.startingPrice,
           bidIncrement: defaultBidIncrement(item.startingPrice),
@@ -93,16 +105,57 @@ export class SeedService implements OnApplicationBootstrap {
         }),
       );
 
+      // Tạo tiền cọc cho các user tham gia
+      const bidderNames = Array.from(new Set(bids.map(([b]) => b)));
+      for (const bidderName of bidderNames) {
+        const isWinner = lastBid && lastBid[0] === bidderName;
+        await manager.save(
+          manager.create(Deposit, {
+            auctionId: auction.id,
+            userId: users[bidderName].id,
+            amount: Math.round(Number(item.startingPrice) * 0.1),
+            status: isEnded
+              ? (isWinner ? DepositStatus.HELD : DepositStatus.REFUNDED)
+              : DepositStatus.HELD,
+          }),
+        );
+      }
+
+      let lastSavedBid: Bid | null = null;
       for (const [index, [bidder, amount]] of bids.entries()) {
         const isLast = index === bids.length - 1;
-        await manager.save(
+        const bid = await manager.save(
           manager.create(Bid, {
             auctionId: auction.id,
             bidderId: users[bidder].id,
             amount,
             status: isLast ? BidStatus.VALID : BidStatus.OUTBID,
-            // Rải thời gian đặt giá trong khoảng phiên đã diễn ra
             createdAt: new Date(now + item.startIn + (index + 1) * 10 * MINUTE),
+          }),
+        );
+        if (isLast) lastSavedBid = bid;
+      }
+
+      // Nếu phiên đã kết thúc và có người thắng, tạo Invoice & Settlement demo
+      if (isEnded && lastBid && lastSavedBid) {
+        const winnerId = users[lastBid[0]].id;
+        const invoice = await manager.save(
+          manager.create(Invoice, {
+            auctionId: auction.id,
+            winnerId,
+            amount: lastBid[1],
+            status: InvoiceStatus.PENDING,
+            dueDate: new Date(endTime.getTime() + 3 * DAY),
+          }),
+        );
+
+        await manager.save(
+          manager.create(Settlement, {
+            auctionId: auction.id,
+            winnerId,
+            winningBidId: lastSavedBid.id,
+            status: SettlementStatus.INVOICE_PENDING,
+            step: 'INITIAL_INVOICE',
           }),
         );
       }

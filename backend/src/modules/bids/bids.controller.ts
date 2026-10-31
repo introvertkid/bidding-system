@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@n
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUserId } from '../../common/decorators/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { DepositGuard } from '../deposits/deposit.guard';
 import { BidsService } from './bids.service';
 import { CreateBidDto } from './dto/create-bid.dto';
 
@@ -11,7 +12,7 @@ export class BidsController {
   constructor(private readonly bidsService: BidsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, DepositGuard)
   @ApiBearerAuth()
   placeBid(
     @Param('auctionId', ParseUUIDPipe) auctionId: string,

@@ -14,6 +14,9 @@ import { Product } from '../../products/entities/product.entity';
 import { Bid } from '../../bids/entities/bid.entity';
 import { Invoice } from '../../invoices/entities/invoice.entity';
 import { User } from '../../users/entities/user.entity';
+import { Deposit } from '../../deposits/entities/deposit.entity';
+import { Settlement } from '../../settlements/entities/settlement.entity';
+import { Offer } from '../../settlements/entities/offer.entity';
 
 export enum AuctionStatus {
   DRAFT = 'DRAFT',
@@ -71,8 +74,17 @@ export class Auction {
   @OneToMany(() => Bid, (bid) => bid.auction)
   bids: Bid[];
 
-  @OneToOne(() => Invoice, (invoice) => invoice.auction)
-  invoice: Invoice;
+  @OneToMany(() => Invoice, (invoice) => invoice.auction)
+  invoices: Invoice[];
+
+  @OneToMany(() => Deposit, (deposit) => deposit.auction)
+  deposits: Deposit[];
+
+  @OneToOne(() => Settlement, (settlement) => settlement.auction)
+  settlement: Settlement;
+
+  @OneToMany(() => Offer, (offer) => offer.auction)
+  offers: Offer[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

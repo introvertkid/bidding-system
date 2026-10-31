@@ -5,7 +5,6 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { Auction } from '../../auctions/entities/auction.entity';
@@ -25,7 +24,7 @@ export class Invoice {
   @Column({ name: 'auction_id' })
   auctionId: string;
 
-  @OneToOne(() => Auction, (auction) => auction.invoice, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Auction, (auction) => auction.invoices, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'auction_id' })
   auction: Auction;
 
@@ -48,6 +47,9 @@ export class Invoice {
 
   @Column({ name: 'due_date', type: 'timestamp' })
   dueDate: Date;
+
+  @Column({ name: 'paid_at', type: 'timestamp', nullable: true })
+  paidAt?: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
