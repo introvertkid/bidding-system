@@ -72,6 +72,43 @@ describe('InvoicesService', () => {
     });
   });
 
+  describe('getInvoiceById', () => {
+    it('throws NotFoundException if invoice not found', async () => {
+      invoicesRepository.findOne!.mockResolvedValue(null);
+
+      await expect(service.getInvoiceById('inv-1', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws ForbiddenException if user is not the winner', async () => {
+      invoicesRepository.findOne!.mockResolvedValue({
+        id: 'inv-1',
+        winnerId: 'other-user',
+      });
+
+      await expect(service.getInvoiceById('inv-1', 'user-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('returns invoice if user is the winner', async () => {
+      const mockInvoice = {
+        id: 'inv-1',
+        winnerId: 'user-1',
+        amount: 5_000_000,
+      };
+      invoicesRepository.findOne!.mockResolvedValue(mockInvoice);
+
+      const result = await service.getInvoiceById('inv-1', 'user-1');
+      expect(result).toEqual(mockInvoice);
+      expect(invoicesRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'inv-1' },
+        relations: { auction: { product: true } },
+      });
+    });
+  });
+
   describe('payInvoice', () => {
     it('throws NotFoundException if invoice not found', async () => {
       invoicesRepository.findOne!.mockResolvedValue(null);

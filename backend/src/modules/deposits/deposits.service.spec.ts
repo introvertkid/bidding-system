@@ -99,6 +99,20 @@ describe('DepositsService', () => {
       expect(depositsRepository.save).toHaveBeenCalled();
     });
 
+    it('ensures minimum deposit is 50,000 even when 10% of starting price is lower', async () => {
+      auctionsRepository.findOne!.mockResolvedValue({
+        id: 'auc-1',
+        status: AuctionStatus.ACTIVE,
+        startingPrice: 100_000, // 10% = 10,000 < 50,000 min
+      });
+      depositsRepository.findOne!.mockResolvedValue(null);
+      depositsRepository.create!.mockImplementation((dto) => dto);
+      depositsRepository.save!.mockImplementation(async (d) => ({ id: 'dep-new', ...d }));
+
+      const result = await service.deposit('auc-1', 'user-1');
+      expect(result.amount).toBe(50_000);
+    });
+
     it('updates previous refunded deposit to HELD with new amount', async () => {
       auctionsRepository.findOne!.mockResolvedValue({
         id: 'auc-1',
@@ -121,6 +135,17 @@ describe('DepositsService', () => {
     });
   });
 
+  describe('getDeposit', () => {
+    it('returns deposit for auction and user', async () => {
+      const mockDeposit = { id: 'dep-1', auctionId: 'auc-1', userId: 'user-1', status: DepositStatus.HELD };
+      depositsRepository.findOne!.mockResolvedValue(mockDeposit);
+
+      const result = await service.getDeposit('auc-1', 'user-1');
+      expect(result).toEqual(mockDeposit);
+      expect(depositsRepository.findOne).toHaveBeenCalledWith({ where: { auctionId: 'auc-1', userId: 'user-1' } });
+    });
+  });
+
   describe('hasActiveDeposit', () => {
     it('returns true if HELD deposit exists', async () => {
       depositsRepository.findOne!.mockResolvedValue({ id: 'dep-1', status: DepositStatus.HELD });
@@ -136,7 +161,7 @@ describe('DepositsService', () => {
   });
 
   describe('refundNonWinners', () => {
-    it('updates non-winners deposits to REFUNDED', async () => {
+    it('updates non-winners deposits to REFUNDED with winnerId', async () => {
       const qb = {
         update: jest.fn().mockReturnThis(),
         set: jest.fn().mockReturnThis(),
@@ -150,10 +175,26 @@ describe('DepositsService', () => {
       expect(affected).toBe(3);
       expect(qb.andWhere).toHaveBeenCalledWith('user_id != :winnerId', { winnerId: 'winner-1' });
     });
+
+    it('refunds all deposits when no winnerId is provided (e.g. failed auction)', async () => {
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 2 }),
+      };
+      depositsRepository.createQueryBuilder!.mockReturnValue(qb);
+
+      const affected = await service.refundNonWinners('auc-1');
+      expect(affected).toBe(2);
+      expect(qb.where).toHaveBeenCalledWith('auction_id = :auctionId', { auctionId: 'auc-1' });
+      expect(qb.andWhere).toHaveBeenCalledWith('status = :heldStatus', { heldStatus: DepositStatus.HELD });
+    });
   });
 
   describe('forfeitDeposit', () => {
-    it('updates deposit status to FORFEITED', async () => {
+    it('updates deposit status to FORFEITED and returns true', async () => {
       depositsRepository.update!.mockResolvedValue({ affected: 1 });
       const res = await service.forfeitDeposit('auc-1', 'winner-1');
       expect(res).toBe(true);
@@ -162,10 +203,16 @@ describe('DepositsService', () => {
         { status: DepositStatus.FORFEITED },
       );
     });
+
+    it('returns false if no deposit was updated', async () => {
+      depositsRepository.update!.mockResolvedValue({ affected: 0 });
+      const res = await service.forfeitDeposit('auc-1', 'winner-1');
+      expect(res).toBe(false);
+    });
   });
 
   describe('refundWinner', () => {
-    it('updates winner deposit status to REFUNDED after payment', async () => {
+    it('updates winner deposit status to REFUNDED after payment and returns true', async () => {
       depositsRepository.update!.mockResolvedValue({ affected: 1 });
       const res = await service.refundWinner('auc-1', 'winner-1');
       expect(res).toBe(true);
@@ -173,6 +220,12 @@ describe('DepositsService', () => {
         { auctionId: 'auc-1', userId: 'winner-1', status: DepositStatus.HELD },
         { status: DepositStatus.REFUNDED },
       );
+    });
+
+    it('returns false if no deposit was updated', async () => {
+      depositsRepository.update!.mockResolvedValue({ affected: 0 });
+      const res = await service.refundWinner('auc-1', 'winner-1');
+      expect(res).toBe(false);
     });
   });
 });
