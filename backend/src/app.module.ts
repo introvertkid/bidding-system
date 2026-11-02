@@ -24,6 +24,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { DepositsModule } from './modules/deposits/deposits.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { SettlementsModule } from './modules/settlements/settlements.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
+import { CacheModule } from './modules/cache/cache.module';
+import { RedisModule } from './common/redis/redis.module';
 import { SeedService } from './database/seed.service';
 
 @Module({
@@ -33,6 +36,7 @@ import { SeedService } from './database/seed.service';
       envFilePath: '../.env', // Đọc từ thư mục gốc
     }),
     ScheduleModule.forRoot(),
+    RedisModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -64,6 +68,8 @@ import { SeedService } from './database/seed.service';
     DepositsModule,
     InvoicesModule,
     SettlementsModule,
+    OutboxModule,
+    CacheModule,
   ],
   controllers: [AppController],
   providers: [AppService, SeedService],
