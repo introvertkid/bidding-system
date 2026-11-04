@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { getCorrelationId } from './common/correlation-id/correlation-id.context';
 
 // Entities
 import { User } from './modules/users/entities/user.entity';
@@ -36,6 +38,26 @@ import { SeedService } from './database/seed.service';
       envFilePath: '../.env', // Đọc từ thư mục gốc
     }),
     ScheduleModule.forRoot(),
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        pinoHttp: {
+          level: configService.get<string>('LOG_LEVEL', 'info'),
+          redact: {
+            paths: ['req.headers.authorization'],
+            censor: '[REDACTED]',
+          },
+          autoLogging: {
+            ignore: (req) => Boolean(req.url?.startsWith('/api/docs')),
+          },
+          // GP1: gắn correlationId (từ ALS của middleware) vào mọi dòng log JSON
+          mixin: () => {
+            const correlationId = getCorrelationId();
+            return correlationId ? { correlationId } : {};
+          },
+        },
+      }),
+    }),
     RedisModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
