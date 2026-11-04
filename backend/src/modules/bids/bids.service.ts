@@ -7,12 +7,15 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomUUID } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
+import { getCorrelationId } from '../../common/correlation-id/correlation-id.context';
 import { maskName } from '../../common/utils/mask-name';
 import { getMinNextBid, getViewStatus } from '../auctions/auction-view';
 import { Auction, AuctionStatus } from '../auctions/entities/auction.entity';
+import { OutboxEvent } from '../outbox/entities/outbox-event.entity';
+import { BID_PLACED_EVENT, BidPlacedPayload } from '../outbox/outbox.constants';
 import { AccountStatus, User } from '../users/entities/user.entity';
-import { AuctionGateway } from './auction.gateway';
 import { Bid, BidStatus } from './entities/bid.entity';
 
 // Luật chống bắn tỉa: bid trong 1 phút cuối sẽ reset đồng hồ về đúng 1 phút
@@ -24,7 +27,6 @@ export class BidsService {
     private dataSource: DataSource,
     @InjectRepository(Bid)
     private bidsRepository: Repository<Bid>,
-    private auctionGateway: AuctionGateway,
   ) {}
 
   async placeBid(auctionId: string, bidderId: string, amount: number) {
@@ -105,44 +107,45 @@ export class BidsService {
         manager.create(Bid, { auctionId, bidderId, amount, status: BidStatus.VALID }),
       );
       const totalBids = await manager.countBy(Bid, { auctionId });
+      const bidderName = maskName(bidder.fullName);
 
-      return {
-        bid,
-        endTime,
-        totalBids,
-        bidderName: maskName(bidder.fullName),
+      // 6. Ghi sự kiện cùng transaction; relay sẽ đẩy sang BullMQ để broadcast realtime
+      const payload: BidPlacedPayload = {
+        auctionId,
+        version: auction.version + 1,
+        highestBidderId: bidderId,
         productName: auction.product.title,
         previousBidderId: auction.highestBidderId,
-        bidIncrement: Number(auction.bidIncrement),
+        update: {
+          auctionId,
+          currentPrice: amount,
+          minNextBid: amount + Number(auction.bidIncrement),
+          highestBidderName: bidderName,
+          totalBids,
+          endTime: endTime.toISOString(),
+          bid: {
+            id: bid.id,
+            bidderName,
+            amount,
+            status: BidStatus.VALID,
+            createdAt: bid.createdAt.toISOString(),
+          },
+        },
       };
+      await manager.save(
+        manager.create(OutboxEvent, {
+          correlationId: getCorrelationId() ?? randomUUID(),
+          aggregateType: 'AUCTION',
+          aggregateId: auctionId,
+          eventType: BID_PLACED_EVENT,
+          payload,
+        }),
+      );
+
+      return { bid, endTime };
     });
 
-    // 7. Transaction đã commit mới báo realtime cho các client khác
-    // TODO: Cập nhật current_price vào Redis
-    const { bid, endTime, totalBids, bidderName } = placed;
-    this.auctionGateway.emitAuctionUpdated({
-      auctionId,
-      currentPrice: amount,
-      minNextBid: amount + placed.bidIncrement,
-      highestBidderName: bidderName,
-      totalBids,
-      endTime: endTime.toISOString(),
-      bid: {
-        id: bid.id,
-        bidderName,
-        amount,
-        status: BidStatus.VALID,
-        createdAt: bid.createdAt.toISOString(),
-      },
-    });
-    if (placed.previousBidderId && placed.previousBidderId !== bidderId) {
-      this.auctionGateway.emitOutbid(placed.previousBidderId, {
-        auctionId,
-        productName: placed.productName,
-        currentPrice: amount,
-      });
-    }
-
+    const { bid, endTime } = placed;
     return {
       status: 'success',
       message: 'Placed bid successfully',

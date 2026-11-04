@@ -17,6 +17,7 @@ import { Invoice } from './modules/invoices/entities/invoice.entity';
 import { Deposit } from './modules/deposits/entities/deposit.entity';
 import { Settlement } from './modules/settlements/entities/settlement.entity';
 import { Offer } from './modules/settlements/entities/offer.entity';
+import { OutboxEvent } from './modules/outbox/entities/outbox-event.entity';
 
 // Modules
 import { AuctionsModule } from './modules/auctions/auctions.module';
@@ -78,6 +79,7 @@ import { SeedService } from './database/seed.service';
           Deposit,
           Settlement,
           Offer,
+          OutboxEvent,
         ],
         synchronize: true, // WARNING: Only for development. Set to false in production and use migrations!
       }),
