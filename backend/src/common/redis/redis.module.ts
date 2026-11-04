@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 
@@ -14,11 +14,17 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
     {
       provide: REDIS_CLIENT,
       inject: [ConfigService],
-      useFactory: (configService: ConfigService): Redis =>
-        new Redis({
+      useFactory: (configService: ConfigService): Redis => {
+        const logger = new Logger('RedisModule');
+        const client = new Redis({
           host: configService.get<string>('REDIS_HOST', 'localhost'),
           port: configService.get<number>('REDIS_PORT', 6379),
-        }),
+          // Redis lỗi thì báo lỗi nhanh, không treo request hàng chục giây
+          maxRetriesPerRequest: 2,
+        });
+        client.on('error', (err) => logger.error(`Lỗi kết nối Redis: ${err.message}`));
+        return client;
+      },
     },
   ],
   exports: [REDIS_CLIENT],
