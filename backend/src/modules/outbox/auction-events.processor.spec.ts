@@ -1,11 +1,13 @@
 import { Job } from 'bullmq';
 import { getCorrelationId } from '../../common/correlation-id/correlation-id.context';
 import { AuctionGateway } from '../bids/auction.gateway';
+import { AuctionCacheService } from '../cache/auction-cache.service';
 import { AuctionEventsProcessor } from './auction-events.processor';
 import { AuctionEventJob, BidPlacedPayload } from './outbox.constants';
 
 describe('AuctionEventsProcessor', () => {
   let gateway: { emitAuctionUpdated: jest.Mock; emitOutbid: jest.Mock };
+  let auctionCache: { applyBidPlaced: jest.Mock };
   let processor: AuctionEventsProcessor;
 
   const payload = (overrides: Partial<BidPlacedPayload> = {}) =>
@@ -27,14 +29,19 @@ describe('AuctionEventsProcessor', () => {
 
   beforeEach(() => {
     gateway = { emitAuctionUpdated: jest.fn(), emitOutbid: jest.fn() };
-    processor = new AuctionEventsProcessor(gateway as unknown as AuctionGateway);
+    auctionCache = { applyBidPlaced: jest.fn() };
+    processor = new AuctionEventsProcessor(
+      gateway as unknown as AuctionGateway,
+      auctionCache as unknown as AuctionCacheService,
+    );
   });
 
-  it('broadcast auction_updated và báo người bị vượt giá', async () => {
+  it('cập nhật cache, broadcast auction_updated và báo người bị vượt giá', async () => {
     const data = payload();
 
     await processor.process(job(data));
 
+    expect(auctionCache.applyBidPlaced).toHaveBeenCalledWith(data);
     expect(gateway.emitAuctionUpdated).toHaveBeenCalledWith(data.update);
     expect(gateway.emitOutbid).toHaveBeenCalledWith('u1', {
       auctionId: 'a1',

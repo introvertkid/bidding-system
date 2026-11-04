@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AuctionCacheService } from './auction-cache.service';
 
-/**
- * Module rỗng (commit khung) — sẽ chứa AuctionCacheService (Cache-Aside) ở GP4.
- */
-@Module({})
+@Module({
+  providers: [AuctionCacheService],
+  exports: [AuctionCacheService],
+})
 export class CacheModule {}

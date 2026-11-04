@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BidsModule } from '../bids/bids.module';
+import { CacheModule } from '../cache/cache.module';
 import { AuctionEventsProcessor } from './auction-events.processor';
 import { OutboxRelayService } from './outbox-relay.service';
 import { AUCTION_EVENTS_QUEUE } from './outbox.constants';
@@ -29,7 +30,10 @@ const redisConnection = (configService: ConfigService) => ({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         // Không xếp hàng lệnh khi mất Redis, nếu không relay sẽ treo giữa transaction
-        connection: { ...redisConnection(configService), enableOfflineQueue: false },
+        connection: {
+          ...redisConnection(configService),
+          enableOfflineQueue: false,
+        },
         defaultJobOptions: {
           attempts: 3,
           backoff: { type: 'exponential', delay: 200 },
@@ -39,6 +43,7 @@ const redisConnection = (configService: ConfigService) => ({
       }),
     }),
     BidsModule,
+    CacheModule,
   ],
   providers: [OutboxRelayService, AuctionEventsProcessor],
 })

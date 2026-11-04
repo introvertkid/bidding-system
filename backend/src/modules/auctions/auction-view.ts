@@ -4,8 +4,30 @@ import { Auction, AuctionStatus } from './entities/auction.entity';
 // Trạng thái hiển thị cho client (khớp với frontend)
 export type AuctionViewStatus = 'UPCOMING' | 'LIVE' | 'ENDED';
 
+// Dữ liệu thô của phiên (GP4): lưu được vào cache, không chứa trường phụ thuộc thời gian
+export type AuctionSnapshot = {
+  id: string;
+  status: AuctionStatus;
+  title: string;
+  description: string;
+  imageUrl: string;
+  sellerId: string;
+  startTime: Date;
+  endTime: Date;
+  startingPrice: number;
+  currentPrice: number;
+  bidIncrement: number;
+  highestBidderId?: string;
+  highestBidderName?: string;
+  bidCount: number;
+  version: number;
+};
+
 // Chưa có cron job đổi trạng thái, nên phiên UPCOMING/ACTIVE được tính theo thời gian thực
-export function getViewStatus(auction: Auction, now = new Date()): AuctionViewStatus {
+export function getViewStatus(
+  auction: Pick<Auction, 'status' | 'startTime' | 'endTime'>,
+  now = new Date(),
+): AuctionViewStatus {
   if (auction.status === AuctionStatus.DRAFT) return 'UPCOMING';
   if (auction.status !== AuctionStatus.UPCOMING && auction.status !== AuctionStatus.ACTIVE) {
     return 'ENDED';
@@ -22,36 +44,56 @@ export function defaultBidIncrement(price: number): number {
   return 100_000;
 }
 
-export function getMinNextBid(auction: Auction): number {
+export function getMinNextBid(
+  auction: Pick<Auction, 'currentPrice' | 'bidIncrement' | 'startingPrice'> & {
+    highestBidderId?: string;
+  },
+): number {
   return auction.highestBidderId
     ? Number(auction.currentPrice) + Number(auction.bidIncrement)
     : Number(auction.startingPrice);
 }
 
-export function toAuctionView(auction: Auction & { bidCount?: number }, now = new Date()) {
-  const status = getViewStatus(auction, now);
-  const hasBids = Boolean(auction.highestBidderId);
-
+export function toAuctionSnapshot(auction: Auction, bidCount: number): AuctionSnapshot {
   return {
     id: auction.id,
+    status: auction.status,
     title: auction.product.title,
     description: auction.product.description ?? '',
     imageUrl: auction.product.images?.[0] ?? '',
     sellerId: auction.product.sellerId,
+    startTime: auction.startTime,
+    endTime: auction.endTime,
     startingPrice: Number(auction.startingPrice),
-    currentBid: hasBids ? Number(auction.currentPrice) : Number(auction.startingPrice),
+    currentPrice: Number(auction.currentPrice),
     bidIncrement: Number(auction.bidIncrement),
-    minNextBid: getMinNextBid(auction),
-    bidCount: auction.bidCount ?? 0,
-    startTime: auction.startTime.toISOString(),
-    endTime: auction.endTime.toISOString(),
+    highestBidderId: auction.highestBidderId ?? undefined,
+    highestBidderName: auction.highestBidder ? maskName(auction.highestBidder.fullName) : undefined,
+    bidCount,
+    version: auction.version,
+  };
+}
+
+export function toAuctionView(snapshot: AuctionSnapshot, now = new Date()) {
+  const status = getViewStatus(snapshot, now);
+
+  return {
+    id: snapshot.id,
+    title: snapshot.title,
+    description: snapshot.description,
+    imageUrl: snapshot.imageUrl,
+    sellerId: snapshot.sellerId,
+    startingPrice: snapshot.startingPrice,
+    currentBid: snapshot.highestBidderId ? snapshot.currentPrice : snapshot.startingPrice,
+    bidIncrement: snapshot.bidIncrement,
+    minNextBid: getMinNextBid(snapshot),
+    bidCount: snapshot.bidCount,
+    startTime: snapshot.startTime.toISOString(),
+    endTime: snapshot.endTime.toISOString(),
     remainingMinutes:
-      status === 'LIVE' ? Math.ceil((auction.endTime.getTime() - now.getTime()) / 60_000) : 0,
+      status === 'LIVE' ? Math.ceil((snapshot.endTime.getTime() - now.getTime()) / 60_000) : 0,
     status,
-    winnerName:
-      status === 'ENDED' && auction.highestBidder
-        ? maskName(auction.highestBidder.fullName)
-        : undefined,
+    winnerName: status === 'ENDED' ? snapshot.highestBidderName : undefined,
   };
 }
 

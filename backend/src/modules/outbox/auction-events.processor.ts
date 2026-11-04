@@ -3,7 +3,12 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { correlationStore } from '../../common/correlation-id/correlation-id.context';
 import { AuctionGateway } from '../bids/auction.gateway';
-import { AUCTION_EVENTS_QUEUE, AuctionEventJob, BidPlacedPayload } from './outbox.constants';
+import { AuctionCacheService } from '../cache/auction-cache.service';
+import {
+  AUCTION_EVENTS_QUEUE,
+  AuctionEventJob,
+  BidPlacedPayload,
+} from './outbox.constants';
 
 /**
  * Consumer của queue auction-events. Worker chạy ngoài request nên phải khôi phục
@@ -13,7 +18,10 @@ import { AUCTION_EVENTS_QUEUE, AuctionEventJob, BidPlacedPayload } from './outbo
 export class AuctionEventsProcessor extends WorkerHost {
   private readonly logger = new Logger(AuctionEventsProcessor.name);
 
-  constructor(private readonly auctionGateway: AuctionGateway) {
+  constructor(
+    private readonly auctionGateway: AuctionGateway,
+    private readonly auctionCache: AuctionCacheService,
+  ) {
     super();
   }
 
@@ -26,8 +34,12 @@ export class AuctionEventsProcessor extends WorkerHost {
   }
 
   private async handleBidPlaced(payload: BidPlacedPayload) {
+    await this.auctionCache.applyBidPlaced(payload);
     this.auctionGateway.emitAuctionUpdated(payload.update);
-    if (payload.previousBidderId && payload.previousBidderId !== payload.highestBidderId) {
+    if (
+      payload.previousBidderId &&
+      payload.previousBidderId !== payload.highestBidderId
+    ) {
       this.auctionGateway.emitOutbid(payload.previousBidderId, {
         auctionId: payload.auctionId,
         productName: payload.productName,
