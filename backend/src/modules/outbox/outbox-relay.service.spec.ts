@@ -40,7 +40,9 @@ describe('OutboxRelayService', () => {
     };
     redis = { status: 'ready' };
     const dataSource = {
-      transaction: jest.fn((work: (m: typeof manager) => Promise<void>) => work(manager)),
+      transaction: jest.fn((work: (m: typeof manager) => Promise<void>) =>
+        work(manager),
+      ),
     };
     service = new OutboxRelayService(
       dataSource as unknown as DataSource,

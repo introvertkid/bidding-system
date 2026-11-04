@@ -51,7 +51,7 @@ describe('IdempotencyInterceptor', () => {
       }),
     }) as unknown as ExecutionContext;
 
-  const handlerReturning = (value: unknown): CallHandler => ({
+  const handlerReturning = (value: unknown) => ({
     handle: jest.fn(() => of(value)),
   });
 
@@ -59,15 +59,17 @@ describe('IdempotencyInterceptor', () => {
     firstValueFrom(await interceptor.intercept(context, handler));
 
   it('từ chối 400 khi thiếu header', async () => {
-    await expect(run(createContext({}, {}), handlerReturning('x'))).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(
+      run(createContext({}, {}), handlerReturning('x')),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('lần đầu chạy handler và lưu COMPLETED với TTL 24h', async () => {
     const handler = handlerReturning({ bidId: 'b1' });
 
-    await expect(run(createContext(), handler)).resolves.toEqual({ bidId: 'b1' });
+    await expect(run(createContext(), handler)).resolves.toEqual({
+      bidId: 'b1',
+    });
 
     expect(handler.handle).toHaveBeenCalledTimes(1);
     expect(JSON.parse(store.get(REDIS_KEY) as string)).toMatchObject({
@@ -75,34 +77,46 @@ describe('IdempotencyInterceptor', () => {
       statusCode: 201,
       body: { bidId: 'b1' },
     });
-    expect(redis.set).toHaveBeenLastCalledWith(REDIS_KEY, expect.any(String), 'EX', 86400);
+    expect(redis.set).toHaveBeenLastCalledWith(
+      REDIS_KEY,
+      expect.any(String),
+      'EX',
+      86400,
+    );
   });
 
   it('gửi lại trả response cũ, không chạy handler lần 2', async () => {
     await run(createContext(), handlerReturning({ bidId: 'b1' }));
     const second = handlerReturning({ bidId: 'b2' });
 
-    await expect(run(createContext(), second)).resolves.toEqual({ bidId: 'b1' });
+    await expect(run(createContext(), second)).resolves.toEqual({
+      bidId: 'b1',
+    });
 
     expect(second.handle).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(201);
-    expect(response.setHeader).toHaveBeenCalledWith('Idempotent-Replayed', 'true');
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Idempotent-Replayed',
+      'true',
+    );
   });
 
   it('trả 409 khi request đầu còn đang xử lý', async () => {
     await interceptor.intercept(createContext(), handlerReturning('x'));
     const second = handlerReturning('y');
 
-    await expect(run(createContext(), second)).rejects.toThrow(ConflictException);
+    await expect(run(createContext(), second)).rejects.toThrow(
+      ConflictException,
+    );
     expect(second.handle).not.toHaveBeenCalled();
   });
 
   it('trả 422 khi cùng key khác payload', async () => {
     await run(createContext({ amount: 100 }), handlerReturning('x'));
 
-    await expect(run(createContext({ amount: 200 }), handlerReturning('y'))).rejects.toThrow(
-      UnprocessableEntityException,
-    );
+    await expect(
+      run(createContext({ amount: 200 }), handlerReturning('y')),
+    ).rejects.toThrow(UnprocessableEntityException);
   });
 
   it('trả 422 khi cùng key dùng cho phiên khác', async () => {
@@ -123,14 +137,20 @@ describe('IdempotencyInterceptor', () => {
     await expect(run(createContext(), failing)).rejects.toBe(error);
     expect(store.has(REDIS_KEY)).toBe(false);
 
-    await expect(run(createContext(), handlerReturning('ok'))).resolves.toBe('ok');
+    await expect(run(createContext(), handlerReturning('ok'))).resolves.toBe(
+      'ok',
+    );
   });
 
   it('không lưu được COMPLETED thì vẫn trả kết quả thành công', async () => {
     const handler = handlerReturning({ bidId: 'b1' });
-    redis.set.mockResolvedValueOnce('OK').mockRejectedValueOnce(new Error('redis down'));
+    redis.set
+      .mockResolvedValueOnce('OK')
+      .mockRejectedValueOnce(new Error('redis down'));
 
-    await expect(run(createContext(), handler)).resolves.toEqual({ bidId: 'b1' });
+    await expect(run(createContext(), handler)).resolves.toEqual({
+      bidId: 'b1',
+    });
     expect(redis.del).not.toHaveBeenCalled();
   });
 });

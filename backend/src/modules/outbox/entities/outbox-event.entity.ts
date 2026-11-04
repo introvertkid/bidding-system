@@ -1,4 +1,10 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 export enum OutboxStatus {
   PENDING = 'PENDING',
@@ -7,7 +13,9 @@ export enum OutboxStatus {
 }
 
 @Entity('outbox_events')
-@Index('idx_outbox_pending', ['status', 'createdAt'], { where: `status = 'PENDING'` })
+@Index('idx_outbox_pending', ['status', 'createdAt'], {
+  where: `status = 'PENDING'`,
+})
 export class OutboxEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -24,7 +24,12 @@ const COMPLETED_TTL_SECONDS = 24 * 60 * 60;
 
 type IdempotencyRecord =
   | { status: 'IN_PROGRESS'; fingerprint: string }
-  | { status: 'COMPLETED'; fingerprint: string; statusCode: number; body: unknown };
+  | {
+      status: 'COMPLETED';
+      fingerprint: string;
+      statusCode: number;
+      body: unknown;
+    };
 
 /**
  * GP2 – Idempotency Key (docs/archtecture_specific.md mục 2):
@@ -40,26 +45,39 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<unknown>> {
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<unknown>> {
     const http = context.switchToHttp();
     const request = http.getRequest<Request & { user?: { id?: string } }>();
     const response = http.getResponse<Response>();
 
     const userId = request.user?.id;
     if (!userId) {
-      throw new UnauthorizedException('Bạn cần đăng nhập để thực hiện thao tác này');
+      throw new UnauthorizedException(
+        'Bạn cần đăng nhập để thực hiện thao tác này',
+      );
     }
 
     const idempotencyKey = request.headers[IDEMPOTENCY_KEY_HEADER];
-    if (typeof idempotencyKey !== 'string' || !KEY_FORMAT.test(idempotencyKey)) {
-      throw new BadRequestException('Thiếu hoặc sai định dạng header Idempotency-Key');
+    if (
+      typeof idempotencyKey !== 'string' ||
+      !KEY_FORMAT.test(idempotencyKey)
+    ) {
+      throw new BadRequestException(
+        'Thiếu hoặc sai định dạng header Idempotency-Key',
+      );
     }
 
     const redisKey = `idempotency:${userId}:${idempotencyKey}`;
     const fingerprint = this.fingerprint(request);
     const acquired = await this.redis.set(
       redisKey,
-      JSON.stringify({ status: 'IN_PROGRESS', fingerprint } satisfies IdempotencyRecord),
+      JSON.stringify({
+        status: 'IN_PROGRESS',
+        fingerprint,
+      } satisfies IdempotencyRecord),
       'EX',
       IN_PROGRESS_TTL_SECONDS,
       'NX',
@@ -71,22 +89,35 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       mergeMap(async (body: unknown) => {
-        await this.saveCompleted(redisKey, fingerprint, response.statusCode, body);
+        await this.saveCompleted(
+          redisKey,
+          fingerprint,
+          response.statusCode,
+          body,
+        );
         return body;
       }),
       catchError((err: unknown) =>
-        from(this.release(redisKey)).pipe(mergeMap(() => throwError(() => err))),
+        from(this.release(redisKey)).pipe(
+          mergeMap(() => throwError(() => err)),
+        ),
       ),
     );
   }
 
   private fingerprint(request: Request): string {
     return createHash('sha256')
-      .update(`${request.method}:${request.originalUrl}:${JSON.stringify(request.body ?? null)}`)
+      .update(
+        `${request.method}:${request.originalUrl}:${JSON.stringify(request.body ?? null)}`,
+      )
       .digest('hex');
   }
 
-  private async replay(redisKey: string, fingerprint: string, response: Response) {
+  private async replay(
+    redisKey: string,
+    fingerprint: string,
+    response: Response,
+  ) {
     const raw = await this.redis.get(redisKey);
     if (!raw) {
       // Key vừa hết hạn hoặc vừa bị xóa do lần trước lỗi, client chỉ cần gửi lại
@@ -115,11 +146,23 @@ export class IdempotencyInterceptor implements NestInterceptor {
     statusCode: number,
     body: unknown,
   ) {
-    const record: IdempotencyRecord = { status: 'COMPLETED', fingerprint, statusCode, body };
+    const record: IdempotencyRecord = {
+      status: 'COMPLETED',
+      fingerprint,
+      statusCode,
+      body,
+    };
     try {
-      await this.redis.set(redisKey, JSON.stringify(record), 'EX', COMPLETED_TTL_SECONDS);
+      await this.redis.set(
+        redisKey,
+        JSON.stringify(record),
+        'EX',
+        COMPLETED_TTL_SECONDS,
+      );
     } catch (err) {
-      this.logger.error(`Không lưu được kết quả idempotency ${redisKey}: ${String(err)}`);
+      this.logger.error(
+        `Không lưu được kết quả idempotency ${redisKey}: ${String(err)}`,
+      );
     }
   }
 
@@ -127,7 +170,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
     try {
       await this.redis.del(redisKey);
     } catch (err) {
-      this.logger.error(`Không xóa được key idempotency ${redisKey}: ${String(err)}`);
+      this.logger.error(
+        `Không xóa được key idempotency ${redisKey}: ${String(err)}`,
+      );
     }
   }
 }

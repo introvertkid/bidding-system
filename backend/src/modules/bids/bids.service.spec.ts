@@ -37,7 +37,11 @@ describe('BidsService.placeBid', () => {
       findOne: jest.fn(async (entity: unknown) =>
         entity === Auction
           ? auction()
-          : { id: 'u2', fullName: 'Trần An', accountStatus: AccountStatus.ACTIVE },
+          : {
+              id: 'u2',
+              fullName: 'Trần An',
+              accountStatus: AccountStatus.ACTIVE,
+            },
       ),
       createQueryBuilder: jest.fn(() => queryBuilder),
       update: jest.fn(),
@@ -50,12 +54,18 @@ describe('BidsService.placeBid', () => {
       countBy: jest.fn().mockResolvedValue(3),
     };
     const dataSource = {
-      transaction: jest.fn((work: (m: typeof manager) => Promise<unknown>) => work(manager)),
+      transaction: jest.fn((work: (m: typeof manager) => Promise<unknown>) =>
+        work(manager),
+      ),
     };
-    service = new BidsService(dataSource as unknown as DataSource, {} as Repository<Bid>);
+    service = new BidsService(
+      dataSource as unknown as DataSource,
+      {} as Repository<Bid>,
+    );
   });
 
-  const outboxWrites = () => manager.create.mock.calls.filter(([entity]) => entity === OutboxEvent);
+  const outboxWrites = () =>
+    manager.create.mock.calls.filter(([entity]) => entity === OutboxEvent);
 
   it('ghi outbox BID_PLACED trong transaction, kèm correlationId và version mới', async () => {
     await correlationStore.run({ correlationId: 'corr-1' }, () =>
@@ -79,7 +89,9 @@ describe('BidsService.placeBid', () => {
   it('thua optimistic lock thì không ghi outbox', async () => {
     queryBuilder.execute.mockResolvedValue({ affected: 0 });
 
-    await expect(service.placeBid('a1', 'u2', 110)).rejects.toThrow(ConflictException);
+    await expect(service.placeBid('a1', 'u2', 110)).rejects.toThrow(
+      ConflictException,
+    );
 
     expect(outboxWrites()).toHaveLength(0);
   });
