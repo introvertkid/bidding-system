@@ -51,7 +51,7 @@ export class Settlement {
   @JoinColumn({ name: 'winning_bid_id' })
   winningBid?: Bid | null;
 
-  @Column({ name: 'current_offer_id', nullable: true })
+  @Column({ name: 'current_offer_id', type: 'uuid', nullable: true })
   currentOfferId?: string | null;
 
   @Column({

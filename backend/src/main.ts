@@ -1,14 +1,24 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { Logger } from 'nestjs-pino';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { CorrelationIdMiddleware } from './common/correlation-id/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { UPLOAD_DIR } from './modules/auctions/auctions.controller';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
+
+  // GP1 – Correlation ID: gắn ID cho mọi request trước khi vào router,
+  // và thay logger mặc định bằng pino (log JSON có correlationId)
+  const correlationIdMiddleware = new CorrelationIdMiddleware();
+  app.use((req, res, next) => correlationIdMiddleware.use(req, res, next));
+  app.useLogger(app.get(Logger));
 
   // Ảnh sản phẩm upload lên được phục vụ tại /uploads/<tên file>
   mkdirSync(UPLOAD_DIR, { recursive: true });

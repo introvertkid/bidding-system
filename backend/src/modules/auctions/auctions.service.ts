@@ -2,8 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Bid } from '../bids/entities/bid.entity';
+import { AuctionCacheService } from '../cache/auction-cache.service';
 import { Product } from '../products/entities/product.entity';
-import { defaultBidIncrement, getViewStatus, toAuctionView } from './auction-view';
+import {
+  defaultBidIncrement,
+  getViewStatus,
+  toAuctionSnapshot,
+  toAuctionView,
+} from './auction-view';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { Auction, AuctionStatus } from './entities/auction.entity';
 
@@ -13,6 +19,7 @@ export class AuctionsService {
     private dataSource: DataSource,
     @InjectRepository(Auction)
     private auctionsRepository: Repository<Auction>,
+    private auctionCache: AuctionCacheService,
   ) {}
 
   // Tạo sản phẩm + phiên đấu giá trong 1 transaction
@@ -55,13 +62,20 @@ export class AuctionsService {
     return this.toViews(auctions);
   }
 
+  // GP4 Cache-Aside: ưu tiên Redis, miss thì đọc DB rồi nạp lại
   async findOne(id: string) {
+    const cached = await this.auctionCache.get(id);
+    if (cached) {
+      return toAuctionView(cached);
+    }
+
     const auction = await this.baseQuery().where('auction.id = :id', { id }).getOne();
     if (!auction) {
       throw new NotFoundException(`Không tìm thấy phiên đấu giá với ID ${id}`);
     }
-    const [view] = await this.toViews([auction]);
-    return view;
+    const [snapshot] = await this.toSnapshots([auction]);
+    await this.auctionCache.save(snapshot);
+    return toAuctionView(snapshot);
   }
 
   // Lịch sử của user: các phiên đã tham gia đặt giá và các phiên đã tạo
@@ -114,7 +128,9 @@ export class AuctionsService {
       throw new NotFoundException(`Không tìm thấy phiên đấu giá với ID ${id}`);
     }
     const updated = this.auctionsRepository.merge(auction, updateData);
-    return this.auctionsRepository.save(updated);
+    const saved = await this.auctionsRepository.save(updated);
+    await this.auctionCache.invalidate(id);
+    return saved;
   }
 
   async remove(id: string): Promise<void> {
@@ -123,6 +139,7 @@ export class AuctionsService {
       throw new NotFoundException(`Không tìm thấy phiên đấu giá với ID ${id}`);
     }
     await this.auctionsRepository.remove(auction);
+    await this.auctionCache.invalidate(id);
   }
 
   private baseQuery() {
@@ -132,8 +149,13 @@ export class AuctionsService {
       .leftJoinAndSelect('auction.highestBidder', 'highestBidder');
   }
 
-  // Đếm số lượt bid của các phiên bằng 1 query GROUP BY
   private async toViews(auctions: Auction[], now = new Date()) {
+    const snapshots = await this.toSnapshots(auctions);
+    return snapshots.map((snapshot) => toAuctionView(snapshot, now));
+  }
+
+  // Đếm số lượt bid của các phiên bằng 1 query GROUP BY
+  private async toSnapshots(auctions: Auction[]) {
     const ids = auctions.map((auction) => auction.id);
     const counts = ids.length
       ? await this.dataSource
@@ -148,7 +170,7 @@ export class AuctionsService {
     const countById = new Map(counts.map((row) => [row.auctionId, Number(row.count)]));
 
     return auctions.map((auction) =>
-      toAuctionView(Object.assign(auction, { bidCount: countById.get(auction.id) ?? 0 }), now),
+      toAuctionSnapshot(auction, countById.get(auction.id) ?? 0),
     );
   }
 }
