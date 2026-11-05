@@ -1,10 +1,8 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { Queue } from 'bullmq';
-import { Redis } from 'ioredis';
 import { DataSource } from 'typeorm';
-import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { OutboxEvent, OutboxStatus } from './entities/outbox-event.entity';
 import { AUCTION_EVENTS_QUEUE, AuctionEventJob } from './outbox.constants';
 
@@ -15,7 +13,8 @@ const MAX_RETRIES = 5;
 /**
  * GP3 – Outbox Relay: quét outbox_events PENDING đẩy sang BullMQ.
  * jobId = outbox.id nên nếu commit lỗi sau khi đã đẩy job, lần quét sau không sinh job trùng.
- * Khi Redis mất kết nối thì bỏ qua lượt quét, để sự cố không ăn hết số lần retry của event.
+ * Khi kết nối của queue chưa sẵn sàng thì bỏ qua lượt quét, để sự cố không ăn hết số lần retry.
+ * Phải kiểm tra đúng kết nối của queue: nó reconnect chậm hơn REDIS_CLIENT nhiều giây.
  */
 @Injectable()
 export class OutboxRelayService {
@@ -26,7 +25,6 @@ export class OutboxRelayService {
     private readonly dataSource: DataSource,
     @InjectQueue(AUCTION_EVENTS_QUEUE)
     private readonly queue: Queue<AuctionEventJob>,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   @Interval(POLL_INTERVAL_MS)
@@ -35,7 +33,8 @@ export class OutboxRelayService {
     this.isRelaying = true;
 
     try {
-      if (this.redis.status !== 'ready') return;
+      const client = await this.queue.getBackend().client;
+      if (client.status !== 'ready') return;
 
       await this.dataSource.transaction(async (manager) => {
         const events = await manager

@@ -1,12 +1,11 @@
 import { Queue } from 'bullmq';
-import { Redis } from 'ioredis';
 import { DataSource } from 'typeorm';
 import { OutboxEvent, OutboxStatus } from './entities/outbox-event.entity';
 import { OutboxRelayService } from './outbox-relay.service';
 
 describe('OutboxRelayService', () => {
-  let queue: { add: jest.Mock };
-  let redis: { status: string };
+  let queue: { add: jest.Mock; getBackend: jest.Mock };
+  let queueClient: { status: string };
   let queryBuilder: Record<string, jest.Mock>;
   let manager: { createQueryBuilder: jest.Mock; save: jest.Mock };
   let service: OutboxRelayService;
@@ -35,10 +34,11 @@ describe('OutboxRelayService', () => {
       createQueryBuilder: jest.fn(() => queryBuilder),
       save: jest.fn(),
     };
+    queueClient = { status: 'ready' };
     queue = {
       add: jest.fn().mockResolvedValue({}),
+      getBackend: jest.fn(() => ({ client: Promise.resolve(queueClient) })),
     };
-    redis = { status: 'ready' };
     const dataSource = {
       transaction: jest.fn((work: (m: typeof manager) => Promise<void>) =>
         work(manager),
@@ -47,7 +47,6 @@ describe('OutboxRelayService', () => {
     service = new OutboxRelayService(
       dataSource as unknown as DataSource,
       queue as unknown as Queue,
-      redis as unknown as Redis,
     );
   });
 
@@ -89,8 +88,8 @@ describe('OutboxRelayService', () => {
     expect(event.status).toBe(OutboxStatus.FAILED);
   });
 
-  it('Redis mất kết nối thì bỏ qua lượt quét, không tốn retry', async () => {
-    redis.status = 'reconnecting';
+  it('kết nối của queue chưa sẵn sàng thì bỏ qua lượt quét, không tốn retry', async () => {
+    queueClient.status = 'reconnecting';
 
     await service.relayPendingEvents();
 
