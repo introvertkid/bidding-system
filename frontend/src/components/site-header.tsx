@@ -9,7 +9,8 @@ type SiteHeaderProps = {
     | 'register'
     | 'auctions'
     | 'history'
-    | 'invoices';
+    | 'invoices'
+    | 'offers';
 };
 
 export default function SiteHeader({
@@ -18,7 +19,8 @@ export default function SiteHeader({
   const isAuthenticatedPage =
     currentPage === 'auctions' ||
     currentPage === 'history' ||
-    currentPage === 'invoices';
+    currentPage === 'invoices' ||
+    currentPage === 'offers';
 
   return (
     <header className="border-b border-[#182b25]/15 bg-white">
@@ -88,6 +90,19 @@ export default function SiteHeader({
             }
           >
             Hóa đơn
+          </Link>
+
+          <Link
+            prefetch={false}
+            href="/offers"
+            aria-current={currentPage === 'offers' ? 'page' : undefined}
+            className={
+              currentPage === 'offers'
+                ? 'font-semibold text-[#234e3c]'
+                : 'hover:underline'
+            }
+          >
+            Lời mời
           </Link>
         </nav>
 
