@@ -1,6 +1,6 @@
-
 import Link from 'next/link';
 import AuthNav from './auth-nav';
+import RealtimeNotifications from './realtime-notifications';
 
 type SiteHeaderProps = {
   currentPage:
@@ -85,12 +85,16 @@ export default function SiteHeader({
           })}
         </nav>
 
-        <AuthNav
-          hideLinks={
-            currentPage === 'login' ||
-            currentPage === 'register'
-          }
-        />
+        <div className="flex items-center gap-3">
+          <RealtimeNotifications />
+
+          <AuthNav
+            hideLinks={
+              currentPage === 'login' ||
+              currentPage === 'register'
+            }
+          />
+        </div>
       </div>
     </header>
   );
