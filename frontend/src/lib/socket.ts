@@ -13,6 +13,29 @@ export type AuctionUpdatedEvent = {
 
 export type OutbidAlertEvent = { auctionId: string; productName: string; currentPrice: number };
 
+
+export type AuctionEndedEvent = {
+  auctionId: string;
+  status: 'ENDED' | 'FAILED';
+  winnerId?: string;
+  finalPrice?: number;
+};
+
+export type OfferReceivedEvent = {
+  offerId: string;
+  auctionId: string;
+  productName?: string;
+  offeredPrice: number;
+  expiresAt: string;
+};
+
+export type InvoiceCreatedEvent = {
+  invoiceId: string;
+  auctionId: string;
+  amount: number;
+  dueDate: string;
+};
+
 let socket: Socket | null = null;
 
 // WebSocket nối thẳng tới backend (cùng host với NEXT_PUBLIC_API_URL)

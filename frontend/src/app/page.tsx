@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 import AuctionBrowser from '@/components/auction-browser';
 import { serverApi } from '@/lib/api';
@@ -19,7 +19,6 @@ export default async function Home() {
           </p>
           <div className="mt-5 flex flex-wrap gap-3 text-sm font-medium">
             <Link prefetch={false} href="#auctions" className="rounded-md bg-[#234e3c] px-4 py-2.5 text-white hover:bg-[#163b2b]">Khám phá phiên đấu giá</Link>
-            <Link prefetch={false} href="/login" className="rounded-md border border-[#182b25]/20 bg-white px-4 py-2.5 hover:bg-[#f0f2ed]">Đăng nhập</Link>
           </div>
         </section>
         <AuctionBrowser auctions={auctions} />
