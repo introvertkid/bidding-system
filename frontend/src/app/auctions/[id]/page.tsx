@@ -10,14 +10,17 @@ export const metadata: Metadata = { title: 'Chi tiết phiên đấu giá | Bidw
 
 export default async function AuctionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [auction, history] = await Promise.all([
-    serverApi<Auction>(`/auctions/${id}`),
-    serverApi<BidHistoryItem[]>(`/auctions/${id}/bids`),
-  ]).catch((error: unknown) => {
+  let auction: Auction;
+  try {
+    auction = await serverApi<Auction>(`/auctions/${id}`);
+  } catch (error: unknown) {
     // 400: id không phải UUID, 404: không tồn tại
     if (error instanceof ApiError && (error.status === 400 || error.status === 404)) notFound();
     throw error;
-  });
+  }
+
+  // Lỗi tải lịch sử không có nghĩa là phiên đấu giá không tồn tại.
+  const history = await serverApi<BidHistoryItem[]>(`/auctions/${id}/bids`);
 
   return (
     <div className="min-h-screen bg-[#fafaf8] text-[#182b25]">
